@@ -8,6 +8,7 @@ WoW Classic addon supporting multiple game versions via multi-TOC:
 - WotLK Classic (Interface 30403)
 - Cata Classic (Interface 40402)
 - MoP Classic (Interface 50504)
+- WoW Forever (Interface 16001, beta; Mainline API)
 
 Lua, AceAddon-3.0 framework.
 Tracks guild members' profession recipes and syncs them across all addon users
@@ -35,6 +36,7 @@ Three places must match before committing a version bump:
 | `GuildCrafts/GuildCrafts_Wrath.toc` | `## Version: X.Y.Z` |
 | `GuildCrafts/GuildCrafts_Cata.toc` | `## Version: X.Y.Z` |
 | `GuildCrafts/GuildCrafts_Mists.toc` | `## Version: X.Y.Z` |
+| `GuildCrafts/GuildCrafts_Camelot.toc` | `## Version: X.Y.Z` |
 | `CHANGELOG.md` | `## X.Y.Z — YYYY-MM-DD` |
 
 `GuildCrafts.VERSION` (integer) and `GuildCrafts.DATA_FORMAT_VERSION` (integer)
@@ -121,6 +123,7 @@ GuildCrafts/
   GuildCrafts_Wrath.toc    -- WotLK Classic
   GuildCrafts_Cata.toc     -- Cata Classic
   GuildCrafts_Mists.toc    -- MoP Classic
+  GuildCrafts_Camelot.toc  -- WoW Forever (Mainline API)
   Modules/
     Data.lua               -- Scanning, merging, pruning, compat wrappers
     Comms.lua              -- Sync protocol, DR/BDR election

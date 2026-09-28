@@ -1,5 +1,11 @@
   # Changelog
 
+  ## Unreleased
+
+  ### New features
+
+  - **WoW Forever support** — new `GuildCrafts_Camelot.toc` (Interface 16001, beta). Forever runs the Mainline API, so item, spell, and recipe lookups now fall back to `C_Item`, `C_SpellBook`, and `C_TradeSkillUI.GetRecipeSchematic` where the Classic globals are gone. Guild chat messages delivered as secret values are ignored by `!gc`.
+
   ## 2.0.2 — 2026-09-08
 
   ### Fixes

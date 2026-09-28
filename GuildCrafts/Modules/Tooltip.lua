@@ -11,7 +11,8 @@ GuildCrafts.Tooltip = Tooltip
 local pairs = pairs
 local type = type
 local tonumber = tonumber
-local GetItemInfo = GetItemInfo
+-- Mainline-API clients (Forever) removed the GetItemInfo global
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
 ----------------------------------------------------------------------
 -- Reverse Lookup Index

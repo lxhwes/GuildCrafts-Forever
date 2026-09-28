@@ -10,6 +10,10 @@ local GuildCrafts = _G.GuildCrafts
 GuildCrafts.UI = GuildCrafts.UI or {}
 local UI = GuildCrafts.UI
 
+-- Mainline-API clients (Forever) removed these globals
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetSpellLink = (C_Spell and C_Spell.GetSpellLink) or GetSpellLink
+
 -- Frame dimensions
 local DEFAULT_WIDTH  = 820
 local DEFAULT_HEIGHT = 540
@@ -2397,12 +2401,8 @@ function UI:LinkRecipeToChat(recipeKey)
     local link
     if k > 0 then
         link = select(2, GetItemInfo(k))
-    elseif k < 0 then
-        if C_Spell and C_Spell.GetSpellLink then
-            link = C_Spell.GetSpellLink(-k)
-        elseif GetSpellLink then
-            link = GetSpellLink(-k)
-        end
+    elseif k < 0 and GetSpellLink then
+        link = GetSpellLink(-k)
     end
     if link then
         ChatEdit_InsertLink(link)
@@ -2428,7 +2428,7 @@ function UI:ShowRecipeTooltip(owner, recipeKey)
             return
         end
         -- Fallback for clients where SetSpellByID is unavailable
-        local link = GetSpellLink(-k)
+        local link = GetSpellLink and GetSpellLink(-k)
         if link then
             GameTooltip:SetHyperlink(link)
             GameTooltip:Show()

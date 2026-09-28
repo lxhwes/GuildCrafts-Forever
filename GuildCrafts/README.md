@@ -11,6 +11,7 @@ Supports multiple Classic versions via multi-TOC:
 | WotLK Classic | 30403 | `GuildCrafts_Wrath.toc` |
 | Cata Classic | 40402 | `GuildCrafts_Cata.toc` |
 | MoP Classic | 50504 | `GuildCrafts_Mists.toc` |
+| WoW Forever (beta) | 16001 | `GuildCrafts_Camelot.toc` |
 
 ## Features
 

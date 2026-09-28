@@ -307,6 +307,10 @@ GuildCrafts._gcLastAddonAck = 0
 --- respond first — prevents double-posting when the DR is in a BG/dungeon.
 --- The guild-chat echo acts as the cross-client deduplication signal.
 function GuildCrafts:OnGuildChatMessage(_event, msg)
+    -- Mainline-API clients (Forever) deliver chat as secret values in restricted
+    -- contexts; string ops on them error.
+    if issecretvalue and issecretvalue(msg) then return end
+
     -- Track any [GuildCrafts] response so fallback timers can detect it.
     if msg:sub(1, 13) == "[GuildCrafts]" then
         self._gcLastGuildCraftsMsg = GetTime()

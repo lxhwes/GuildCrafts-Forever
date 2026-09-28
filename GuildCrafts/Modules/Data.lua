@@ -54,6 +54,17 @@ local function GetSpellName(spellID)
     return GetSpellInfo(spellID)
 end
 
+-- Mainline-API clients (Forever) removed the GetItemInfo global; C_Item returns the same values.
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+
+-- IsSpellKnown moved to C_SpellBook on Mainline-API clients.
+local function IsSpellKnownCompat(spellID)
+    if IsSpellKnown then return IsSpellKnown(spellID) end
+    if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(spellID) end
+    if IsPlayerSpell then return IsPlayerSpell(spellID) end
+    return false
+end
+
 -- C_SkillLine (WotLK+) replaces GetNumSkillLines/GetSkillLineInfo.
 local function IterSkillLines()
     if C_SkillLine and C_SkillLine.GetSkillLines then
@@ -754,7 +765,7 @@ function Data:DetectSpecialisations()
     local changed = false
     for spellID, info in pairs(SPECIALISATION_SPELLS) do
         local profData = entry.professions[info.prof]
-        if profData and IsSpellKnown(spellID) then
+        if profData and IsSpellKnownCompat(spellID) then
             detectedSpecs[info.prof] = info.spec
             if profData.specialisation ~= info.spec then
                 profData.specialisation = info.spec
@@ -1411,6 +1422,51 @@ end
 -- Modern Scan (MoP+ uses C_TradeSkillUI namespace)
 ----------------------------------------------------------------------
 
+-- Mainline-API clients (Forever) dropped GetRecipeItemLink and the per-index
+-- reagent getters in favour of GetRecipeSchematic.
+local function GetRecipeSchematic(recipeID)
+    if C_TradeSkillUI.GetRecipeSchematic then
+        return C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
+    end
+end
+
+local function GetRecipeOutputItemID(recipeID, schematic)
+    if C_TradeSkillUI.GetRecipeItemLink then
+        local itemLink = C_TradeSkillUI.GetRecipeItemLink(recipeID)
+        return itemLink and tonumber(itemLink:match("item:(%d+)"))
+    end
+    return schematic and schematic.outputItemID
+end
+
+local function GetRecipeReagentList(recipeID, schematic)
+    local reagents = {}
+    if C_TradeSkillUI.GetRecipeNumReagents then
+        local numReagents = C_TradeSkillUI.GetRecipeNumReagents(recipeID) or 0
+        for j = 1, numReagents do
+            local reagentName, _, reagentCount = C_TradeSkillUI.GetRecipeReagentInfo(recipeID, j)
+            if reagentName then
+                local itemID_r
+                local rLink = C_TradeSkillUI.GetRecipeReagentItemLink(recipeID, j)
+                if rLink then itemID_r = tonumber(rLink:match("item:(%d+)")) end
+                reagents[#reagents + 1] = { name = reagentName, count = reagentCount or 1, itemID = itemID_r }
+            end
+        end
+    elseif schematic and schematic.reagentSlotSchematics then
+        local basic = Enum.CraftingReagentType and Enum.CraftingReagentType.Basic
+        for _, slot in ipairs(schematic.reagentSlotSchematics) do
+            local reagent = slot.reagents and slot.reagents[1]
+            if reagent and reagent.itemID and (not basic or slot.reagentType == basic) then
+                reagents[#reagents + 1] = {
+                    name = GetItemInfo(reagent.itemID) or "",
+                    count = slot.quantityRequired or 1,
+                    itemID = reagent.itemID,
+                }
+            end
+        end
+    end
+    return reagents
+end
+
 function Data:ScanTradeSkillModern()
     if not C_TradeSkillUI then
         GuildCrafts:Debug("ScanTradeSkillModern: C_TradeSkillUI is nil")
@@ -1489,36 +1545,16 @@ function Data:ScanTradeSkillModern()
     for _, recipeID in ipairs(recipeIDs) do
         local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
         if info and info.learned then
-            local key
-            local itemLink = C_TradeSkillUI.GetRecipeItemLink(recipeID)
-            if itemLink then
-                local itemID = tonumber(itemLink:match("item:(%d+)"))
-                key = itemID or -recipeID
-            else
-                key = -recipeID
-            end
+            local schematic = GetRecipeSchematic(recipeID)
+            local key = GetRecipeOutputItemID(recipeID, schematic) or -recipeID
 
             if key then
                 -- Scan reagents into shared RecipeDB
-                if C_TradeSkillUI.GetRecipeNumReagents then
-                    local numReagents = C_TradeSkillUI.GetRecipeNumReagents(recipeID)
-                    if numReagents and numReagents > 0 then
-                        local existingReagents = self:GetRecipeReagents(key)
-                        if not existingReagents or #existingReagents < numReagents then
-                            local reagents = {}
-                            for j = 1, numReagents do
-                                local reagentName, _, reagentCount = C_TradeSkillUI.GetRecipeReagentInfo(recipeID, j)
-                                if reagentName then
-                                    local itemID_r
-                                    local rLink = C_TradeSkillUI.GetRecipeReagentItemLink(recipeID, j)
-                                    if rLink then itemID_r = tonumber(rLink:match("item:(%d+)")) end
-                                    reagents[#reagents + 1] = { name = reagentName, count = reagentCount or 1, itemID = itemID_r }
-                                end
-                            end
-                            if #reagents > 0 then
-                                self:SetRecipeInfo(key, info.name, info.categoryName, reagents)
-                            end
-                        end
+                local reagents = GetRecipeReagentList(recipeID, schematic)
+                if #reagents > 0 then
+                    local existingReagents = self:GetRecipeReagents(key)
+                    if not existingReagents or #existingReagents < #reagents then
+                        self:SetRecipeInfo(key, info.name, info.categoryName, reagents)
                     end
                 end
 
