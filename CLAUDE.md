@@ -113,6 +113,7 @@ Current status:
 - ✅ Patch 4 — Per-peer backoff (v1.7.0)
 - ✅ Patch 5 — Tombstone pruning (v1.8.0)
 - ✅ Multi-expansion support — branch: `feature/multi-expansion-support`
+- 🚧 WoW Forever support — branch: `feature/forever-support`; see `spec/migration-forever.md`
 
 ---
 
@@ -151,3 +152,28 @@ GuildCrafts/
 There is no test suite. Verification is manual in-game. Key things to check
 after any sync-layer change: `/gc comms` debug output, chunk delivery in a
 multi-user guild session, role election log.
+
+---
+
+## In-game commands (gist workflow)
+
+Claude can't run the game, and the Forever beta runs on Alex's other PC. In-game
+commands reach that PC through one secret gist, not through chat.
+
+- Gist: https://gist.github.com/lxhwes/6ccdf7ad7451481d916410b65beff5ce
+  (file `gc-forever-probes.md`). It's secret, which means unlisted: anyone with the link can open it.
+- Source of truth: `docs/ingame-commands.md` in this repo. The gist mirrors that file.
+  Never edit the gist by hand.
+- Claude's sandbox can't authenticate `gh`, so Alex publishes each update:
+  `! gh gist edit 6ccdf7ad7451481d916410b65beff5ce --filename gc-forever-probes.md docs/ingame-commands.md`
+- After an update, Claude confirms the change by fetching the raw gist URL.
+
+Rules for every command in the file:
+- One command per fenced block, so GitHub shows a copy button for each.
+- `/run` lines must be 255 characters or fewer. WoWLua doesn't load on 1.60.1.70170.
+- End every statement with `;`, and never use `--` comments.
+- Parse-check with Lua 5.1 `luac -p` as written and again with newlines stripped.
+- Feature-detect or `pcall` anything that might be nil, because one error kills the whole line.
+- Put a tag at the start of each `print` (for example `GC`, `TOC`, `EXP`, `TS`) so pasted output can be matched to its command.
+- Above each block, one line saying when to run it (for example "with a profession window open") and how to read the output.
+- Alex pastes results back into chat. Record them in `spec/migration-forever.md` and never assume a result.
