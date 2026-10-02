@@ -255,8 +255,11 @@ after load, not whether the addon loads.
   - Still unverified: the sender name for a guildmate on another server (GUID prefix 4613 vs
     4619), and whether an addon whisper to `First Surname` reaches them. The two-client
     checklist covers both.
-- **ChatThrottleLib v31 taint (F18).** Its `SendChatMessage` hook calls `strlen` on secret
-  chat values. v32 has the `issecretvalue` guard.
+- **ChatThrottleLib v31 taint (F18). Fixed:** the bundled copy is v32 from Ace3
+  `Release-r1403` (sha256 `3491b6c9…6dde8`). Its hooks return early when text or destination is a
+  secret value (`ChatThrottleLib.lua:282`, `:292`). It's otherwise identical to v31, and
+  AceComm-3.0 (MINOR 14) is unaffected. The unused standalone v29 copy is removed. Whether this
+  clears the taint in game is unverified.
 - **Empty profession read purges data (F19), fallback confirmed absent in game 2026-10-02.**
   `DetectProfessions` runs 5s after login or `/reload`, not at logout. `SKL` printed
   `false false false true`: `C_SkillLine`, global `GetNumSkillLines` and global
