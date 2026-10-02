@@ -175,7 +175,7 @@ function Tooltip:OnTooltipSetItem(tooltip, data)
             break
         end
 
-        local name = crafter.key:match("^(.+)-") or crafter.key
+        local name = GuildCrafts.Data:GetMemberName(crafter.key)
         local isOnline = GuildCrafts.Data:IsMemberOnline(crafter.key)
         local specSuffix = crafter.spec and (" [" .. crafter.spec .. "]") or ""
 

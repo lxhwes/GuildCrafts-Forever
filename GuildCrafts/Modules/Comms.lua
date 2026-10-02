@@ -1378,8 +1378,11 @@ function Comms:SendMessage(msgType, payload, distribution, target, priority)
 
     -- Send via AceComm (handles chunking automatically)
     if distribution == "WHISPER" and target then
-        -- Extract character name without realm for whisper target
-        local whisperTarget = target:match("^(.+)-") or target
+        local whisperTarget = GuildCrafts.Data:GetWhisperTarget(target)
+        if not whisperTarget then
+            GuildCrafts:Debug("SendMessage: no whisper target for", target, "— dropped", msgType)
+            return
+        end
         self:SendCommMessage(PREFIX, toSend, distribution, whisperTarget, priority or PRIO_NORMAL)
     elseif distribution == "GUILD" then
         self:SendCommMessage(PREFIX, toSend, distribution, nil, priority or PRIO_NORMAL)
@@ -1531,8 +1534,10 @@ function Comms:DumpStatus()
     local count = 0
     for key, info in pairs(self.addonUsers) do
         count = count + 1
+        local name = GuildCrafts.Data:GetMemberName(key)
+        local label = key:find(name, 1, true) and key or (name .. " " .. key)
         GuildCrafts:Printf("  [%d] %s (v%d, seen %ds ago)",
-            count, key, info.version or 0, time() - (info.lastSeen or 0))
+            count, label, info.version or 0, time() - (info.lastSeen or 0))
     end
     GuildCrafts:Printf("Total addon users: %d", count)
 end

@@ -407,9 +407,9 @@ function Data:RebuildOnlineCache()
 
     local numMembers = GetNumGuildMembers()
     for i = 1, numMembers do
-        local name, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
+        local name, _, _, _, _, _, _, _, isOnline, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
         if name then
-            local memberKey = self:NormalizeMemberKey(name)
+            local memberKey = self:RosterMemberKey(name, guid)
             if memberKey then
                 self._onlineCache[memberKey] = isOnline or false
             end
@@ -456,6 +456,21 @@ function Data:NormalizeMemberKey(key)
     end
     if not name or name == "" then return nil end
     return name .. "-" .. NormalizeRealmName(realm)
+end
+
+--- Member key for a guild roster row. guid is GetGuildRosterInfo's 17th return.
+function Data:RosterMemberKey(name, _guid)
+    return self:NormalizeMemberKey(name)
+end
+
+--- Display name for a member key.
+function Data:GetMemberName(key)
+    return key:match("^(.+)-") or key
+end
+
+--- Character name to address an addon or chat whisper to, or nil if unknown.
+function Data:GetWhisperTarget(key)
+    return key:match("^(.+)-") or key
 end
 
 ----------------------------------------------------------------------
@@ -1977,9 +1992,9 @@ function Data:PruneRoster()
     end
 
     for i = 1, numMembers do
-        local name, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = GetGuildRosterInfo(i)
+        local name, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
         if name then
-            local memberKey = self:NormalizeMemberKey(name)
+            local memberKey = self:RosterMemberKey(name, guid)
             if memberKey then
                 rosterKeys[memberKey] = true
             end
@@ -2213,7 +2228,7 @@ function Data:GetMembersByProfession()
         local seen    = {}   -- displayName -> index in deduped
         local deduped = {}
         for _, info in ipairs(list) do
-            local displayName = info.key:match("^(.+)-") or info.key
+            local displayName = Data:GetMemberName(info.key)
             local idx = seen[displayName]
             if not idx then
                 deduped[#deduped + 1] = info
@@ -2245,7 +2260,7 @@ function Data:GetProfessionMemberCount(profName, onlineOnly)
     for memberKey, entry in pairs(gdb) do
         if type(entry) == "table" and entry.professions and entry.professions[profName] then
             if not onlineOnly or self:IsMemberOnline(memberKey) then
-                local displayName = memberKey:match("^(.+)-") or memberKey
+                local displayName = Data:GetMemberName(memberKey)
                 if not seen[displayName] then
                     seen[displayName] = true
                     count = count + 1
@@ -2312,7 +2327,7 @@ function Data:GetAllRecipesForProfession(profName)
         local seenCrafters   = {}
         local uniqueCrafters = {}
         for _, c in ipairs(recipe.crafters) do
-            local displayName = c.key:match("^(.+)-") or c.key
+            local displayName = Data:GetMemberName(c.key)
             if not seenCrafters[displayName] then
                 seenCrafters[displayName] = true
                 uniqueCrafters[#uniqueCrafters + 1] = c
@@ -2382,7 +2397,7 @@ function Data:SearchRecipesByKey(key)
         local seenCrafters   = {}
         local uniqueCrafters = {}
         for _, c in ipairs(v.crafters) do
-            local displayName = c.key:match("^(.+)-") or c.key
+            local displayName = Data:GetMemberName(c.key)
             if not seenCrafters[displayName] then
                 seenCrafters[displayName] = true
                 uniqueCrafters[#uniqueCrafters + 1] = c
@@ -2466,7 +2481,7 @@ function Data:SearchRecipes(query, fuzzy)
         local seenCrafters   = {}
         local uniqueCrafters = {}
         for _, c in ipairs(v.crafters) do
-            local displayName = c.key:match("^(.+)-") or c.key
+            local displayName = Data:GetMemberName(c.key)
             if not seenCrafters[displayName] then
                 seenCrafters[displayName] = true
                 uniqueCrafters[#uniqueCrafters + 1] = c

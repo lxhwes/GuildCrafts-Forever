@@ -259,7 +259,7 @@ function GuildCrafts:FormatCraftersLine(crafters, prefix, maxNames, extraReserve
     for i = 1, #sorted do
         if shown >= cap then break end
         local c    = sorted[i]
-        local name = c.key:match("^(.+)-") or c.key
+        local name = self.Data:GetMemberName(c.key)
         local isOn = self.Data:IsMemberOnline(c.key)
         if isOn then name = name .. " (online)" end
 
