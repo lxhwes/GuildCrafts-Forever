@@ -249,8 +249,11 @@ after load, not whether the addon loads.
   `false false false true`: `C_SkillLine`, global `GetNumSkillLines` and global
   `GetSkillLineInfo` don't exist; only `C_SkillInfo` does. So when `GetProfessions()` comes back
   empty, the fallback (`Data.lua:69-89`) reads zero lines. Every stored profession is then
-  purged and its removal broadcast (`Data.lua:645-755`). legacynext saw professions read empty
-  at `PLAYER_LOGOUT` (`CLAUDE.md:254-257`). A fix is proposed but not approved.
+  purged and its removal broadcast. legacynext saw professions read empty at `PLAYER_LOGOUT`
+  (`CLAUDE.md:254-257`). **Fixed:** detection never removes a profession that holds recipes;
+  `/gc drop <profession>` is the only path, removals carry `x = 1` and must be newer, and
+  `MergeIncoming` keeps professions an incoming entry lost without a drop marker
+  (`Data:CarryOverProfessions`).
   `PROF` on the same day: slot 1 Alchemy, slot 2 Herbalism, slot 5 Cooking, slots 3, 4, 6 and 7
   empty. That matches the positions GuildCrafts reads.
 - **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified.

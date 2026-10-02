@@ -699,18 +699,45 @@ function Data:DetectProfessions()
         end
     end
 
-    -- Detect dropped professions — collect names before nil'ing
+    -- Professions missing from this read. A read can come back empty (Forever has no
+    -- skill-line fallback), so a profession holding recipes is never removed here:
+    -- only /gc drop removes one. Recipe-less entries drop silently and aren't broadcast.
+    local readEmpty = next(currentProfs) == nil
     local profChanged = false
-    local droppedProfs = {}
-    for profName, _ in pairs(entry.professions) do
+    local emptyDrops, missing = {}, {}
+    for profName, profData in pairs(entry.professions) do
         if TRACKED_PROFESSIONS[profName] and not currentProfs[profName] then
-            droppedProfs[#droppedProfs + 1] = profName
+            if not readEmpty and not next(profData.recipes or {}) then
+                emptyDrops[#emptyDrops + 1] = profName
+            else
+                missing[#missing + 1] = profName
+            end
         end
     end
-    for _, profName in ipairs(droppedProfs) do
-        GuildCrafts:Printf("Profession dropped: %s — purging recipes.", profName)
+    for _, profName in ipairs(emptyDrops) do
         entry.professions[profName] = nil
         profChanged = true
+    end
+
+    if readEmpty and #missing > 0 then
+        self._detectRetries = (self._detectRetries or 0) + 1
+        if self._detectRetries <= 2 then
+            GuildCrafts:Debug("DetectProfessions: empty read, keeping stored professions; retrying in 10s")
+            self:ScheduleTimer("DetectProfessions", 10)
+        end
+    elseif #missing > 0 then
+        self._detectRetries = 0
+        self._dropHinted = self._dropHinted or {}
+        table.sort(missing)
+        for _, profName in ipairs(missing) do
+            if not self._dropHinted[profName] then
+                self._dropHinted[profName] = true
+                GuildCrafts:Printf("%s wasn't detected on this character. If you dropped it, type /gc drop %s to remove its recipes for the guild.",
+                    profName, profName:lower())
+            end
+        end
+    else
+        self._detectRetries = 0
     end
 
     -- Ensure entries exist for current professions and update skill levels
@@ -718,6 +745,12 @@ function Data:DetectProfessions()
     for profName, _ in pairs(currentProfs) do
         if not entry.professions[profName] then
             entry.professions[profName] = { recipes = {} }
+        end
+        -- Re-learned after a /gc drop: the marker no longer applies.
+        if entry.dropped and entry.dropped[profName] then
+            entry.dropped[profName] = nil
+            if next(entry.dropped) == nil then entry.dropped = nil end
+            dataChanged = true
         end
         local sl = skillLevels[profName]
         if sl then
@@ -734,20 +767,53 @@ function Data:DetectProfessions()
         entry.lastUpdate = time()
     end
 
-    -- Broadcast each dropped profession individually so receivers know which one
-    if profChanged then
-        if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastProfessionRemoval then
-            for _, profName in ipairs(droppedProfs) do
-                GuildCrafts.Comms:BroadcastProfessionRemoval(playerKey, profName)
-            end
-        end
-    end
-
     self._currentProfs = currentProfs
     GuildCrafts:Debug("Detected professions:", table.concat(self:GetProfessionList(), ", "))
 
     -- Detect specialisations immediately after professions
     self:DetectSpecialisations()
+end
+
+--- Remove one of the player's own stored professions and tell the guild.
+--- The only path that deletes a profession holding recipes (/gc drop <profession>).
+function Data:DropProfession(input)
+    if not input or input == "" then
+        GuildCrafts:Print("Usage: /gc drop <profession>")
+        return
+    end
+    local playerKey = self:GetPlayerKey()
+    local entry = self:GetMemberEntry(playerKey, false)
+    local wanted = input:lower()
+    local profName
+    for name in pairs(entry and entry.professions or {}) do
+        if name:lower() == wanted or self:GetCanonicalProfName(input) == name then
+            profName = name
+        end
+    end
+    if not profName then
+        GuildCrafts:Printf("No stored profession called %s.", input)
+        return
+    end
+    if self._currentProfs and self._currentProfs[profName] then
+        GuildCrafts:Printf("%s is still known on this character. Unlearn it first.", profName)
+        return
+    end
+
+    local now = time()
+    entry.professions[profName] = nil
+    entry.dropped = entry.dropped or {}
+    entry.dropped[profName] = now
+    entry.lastUpdate = now
+    if GuildCrafts.Tooltip then
+        GuildCrafts.Tooltip:InvalidateIndex()
+    end
+    if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastProfessionRemoval then
+        GuildCrafts.Comms:BroadcastProfessionRemoval(playerKey, profName)
+    end
+    GuildCrafts:Printf("Removed %s and its recipes.", profName)
+    if GuildCrafts.UI and GuildCrafts.UI.Refresh then
+        GuildCrafts.UI:Refresh()
+    end
 end
 
 ----------------------------------------------------------------------
@@ -1617,6 +1683,7 @@ function Data:StripSyncFields(entry)
         lastUpdate = entry.lastUpdate,
         dataFormat = GuildCrafts.DATA_FORMAT_VERSION,
         professions = {},
+        dropped    = entry.dropped,  -- /gc drop markers: { [profName] = time }
     }
 
     for profName, profData in pairs(entry.professions or {}) do
@@ -1780,6 +1847,9 @@ function Data:MergeIncoming(incomingData)
                         end
                     end
                     if not suspicious then
+                        if localEntry then
+                            self:CarryOverProfessions(memberKey, localEntry, incomingEntry)
+                        end
                         gdb[memberKey] = incomingEntry
                         self:ExtractToRecipeDB(incomingEntry)
                         changed = true
@@ -1794,6 +1864,23 @@ function Data:MergeIncoming(incomingData)
         GuildCrafts.Tooltip:InvalidateIndex()
     end
     return changed
+end
+
+--- Keep professions a newer replacement would silently lose. An incoming entry may only
+--- drop a profession that holds recipes here if it carries a /gc drop marker for it.
+function Data:CarryOverProfessions(memberKey, localEntry, incomingEntry)
+    incomingEntry.professions = incomingEntry.professions or {}
+    local dropped = incomingEntry.dropped
+    for profName, localProf in pairs(localEntry.professions or {}) do
+        if next(localProf.recipes or {}) and not (dropped and dropped[profName]) then
+            local incomingProf = incomingEntry.professions[profName]
+            if not incomingProf or not next(incomingProf.recipes or {}) then
+                incomingEntry.professions[profName] = localProf
+                GuildCrafts:Debug("MergeIncoming: kept", profName, "for", memberKey,
+                    "(incoming had no recipes and no drop marker)")
+            end
+        end
+    end
 end
 
 --- Merge a single delta (one recipe added to a member's profession).
@@ -1820,6 +1907,10 @@ function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpda
     if not entry then return end
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
+    end
+    if entry.dropped and entry.dropped[profName] then
+        entry.dropped[profName] = nil
+        if next(entry.dropped) == nil then entry.dropped = nil end
     end
     entry.professions[profName].recipes[recipeKey] = recipeData
     -- Extract reagents/category to shared RecipeDB
@@ -1849,11 +1940,16 @@ function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate)
         GuildCrafts:Debug("MergeProfessionRemoval: tombstone present for", memberKey, "— skipping")
         return
     end
+    -- Only a removal newer than our copy applies; a stale one would undo later data.
+    if not newLastUpdate or newLastUpdate <= ((entry and entry.lastUpdate) or 0) then
+        GuildCrafts:Debug("MergeProfessionRemoval: ignored stale removal for", memberKey, profName)
+        return
+    end
     if entry and entry.professions[profName] then
         entry.professions[profName] = nil
-        if newLastUpdate and newLastUpdate > (entry.lastUpdate or 0) then
-            entry.lastUpdate = newLastUpdate
-        end
+        entry.dropped = entry.dropped or {}
+        entry.dropped[profName] = newLastUpdate
+        entry.lastUpdate = newLastUpdate
         if GuildCrafts.Tooltip then
             GuildCrafts.Tooltip:InvalidateIndex()
         end

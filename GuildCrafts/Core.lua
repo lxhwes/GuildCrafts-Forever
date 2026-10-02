@@ -512,6 +512,12 @@ function GuildCrafts:SlashHandler(input)
         self:Print("Wiping all SavedVariables and reloading...")
         GuildCraftsDB = nil
         ReloadUI()
+    elseif input == "drop" or input:match("^drop%s") then
+        if self.Data then
+            self.Data:DropProfession(input:match("^drop%s+(.+)$"))
+        else
+            self:Print("Data module not loaded.")
+        end
     elseif input == "minimap" then
         if self.MinimapButton then
             self.MinimapButton:Toggle()
@@ -519,7 +525,7 @@ function GuildCrafts:SlashHandler(input)
             self:Print("MinimapButton module not loaded.")
         end
     else
-        self:Print("Commands: /gc, /gc debug, /gc dump, /gc comms, /gc mem, /gc minimap, /gc reset")
+        self:Print("Commands: /gc, /gc debug, /gc dump, /gc comms, /gc mem, /gc minimap, /gc reset, /gc drop <profession>")
     end
 end
 

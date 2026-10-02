@@ -6,6 +6,10 @@
 
   - **WoW Forever support** — new `GuildCrafts_Camelot.toc` (Interface 16001, beta). Forever reads the `_Camelot` suffix and prefers it over the unsuffixed TOC; the file carries the CurseForge project ID and takes its version from the packager. Forever runs the Mainline API, so item, spell, and recipe lookups now fall back to `C_Item`, `C_SpellBook`, and `C_TradeSkillUI.GetRecipeSchematic` where the Classic globals are gone. Guild chat messages delivered as secret values are ignored by `!gc`.
 
+  ### Fixes
+
+  - **No more profession purges from a bad read** — a profession that holds recipes is no longer deleted, or announced as dropped to the guild, just because the client's profession read came back empty or short. Forever has no skill-line fallback, so one empty read used to purge every profession for every guildmate. GuildCrafts now keeps the data, retries the read, and prints a hint; `/gc drop <profession>` is the only way to remove one. Peers ignore removals that don't come from `/gc drop` or are older than their copy, and a sync can no longer replace a profession's recipes with nothing.
+
   ## 2.0.2 — 2026-09-08
 
   ### Fixes

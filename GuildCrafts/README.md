@@ -65,6 +65,7 @@ The WoW client automatically loads the correct TOC file for your game version.
 | `/gc mem` | Print addon memory usage |
 | `/gc minimap` | Toggle minimap button visibility |
 | `/gc reset` | Wipe all saved data and reload |
+| `/gc drop <profession>` | Remove one of your stored professions and tell the guild (only after unlearning it) |
 
 ## How It Works
 

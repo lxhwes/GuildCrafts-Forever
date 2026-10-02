@@ -1088,6 +1088,7 @@ function Comms:BroadcastProfessionRemoval(memberKey, profName)
         member     = memberKey,
         profession = profName,
         lastUpdate = entry and entry.lastUpdate or time(),
+        x          = 1,  -- explicit /gc drop; receivers ignore removals without it
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (remove) for", memberKey, profName)
 end
@@ -1157,7 +1158,12 @@ function Comms:HandleDeltaUpdate(payload, sender)
         return
 
     elseif payload.type == "remove_profession" then
-        -- Remove entire profession
+        -- Only an explicit /gc drop removes a profession. Older clients also sent
+        -- removals after an empty profession read, which would purge good data.
+        if payload.x ~= 1 then
+            GuildCrafts:Debug("DELTA_UPDATE (remove) from", sender, "ignored — not an explicit drop")
+            return
+        end
         local gdb = GuildCrafts.Data:GetGuildDB()
         local entry = gdb and gdb[memberKey]
         if entry then
