@@ -1,0 +1,145 @@
+name: Release (Forever only)
+
+# Packages and publishes the WoW Forever flavor only. GuildCrafts was forked from
+# dkruenbo/GuildCrafts with the author's permission on the condition that no file
+# published from here is offered to another flavor (docs/ORIGIN.md).
+#
+# Fail-safe order:
+#   1. Delete every TOC except GuildCrafts_Camelot.toc, and Data/, then check.
+#   2. Package with -d (no upload, no tokens in env) and -g forever, which makes
+#      release.sh exit if any non-Forever TOC is left (release.sh:1314).
+#   3. Gate: the packager log, the zip and the package folder must all be
+#      Forever-only, or the job fails before anything is uploaded.
+#   4. Publish only from a tag, re-zipping the folder the gate checked (-c -o).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag, branch or SHA to package (blank = the branch you run this from)"
+        required: false
+        default: ""
+      publish:
+        description: "Upload to CurseForge and create the GitHub release (ref must be a tag)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      # BigWigsMods/packager v2.6.1 (= v2 on 2026-10-02). Bump on purpose, then dry-run.
+      PACKAGER_SHA: e50a250f8705041e40f2fa1ddcb280a686d65aa0
+      PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+    steps:
+      - name: Check out GuildCrafts
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # changelog and version come from tags and history
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Check out the packager at a pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: BigWigsMods/packager
+          ref: ${{ env.PACKAGER_SHA }}
+          path: .packager   # dot-dir: release.sh never packages it (release.sh:1829)
+
+      - name: Refuse to publish anything but a tag
+        if: env.PUBLISH == 'true'
+        run: |
+          tag=$(git tag --points-at HEAD | head -n1)
+          [[ -n $tag ]] || { echo "::error::Publishing needs HEAD to be a tag."; exit 1; }
+          echo "Publishing $tag"
+
+      - name: Strip every flavor except Forever
+        working-directory: GuildCrafts
+        run: |
+          rm -f GuildCrafts.toc GuildCrafts_Vanilla.toc GuildCrafts_Wrath.toc GuildCrafts_Cata.toc GuildCrafts_Mists.toc
+          rm -rf Data
+          mapfile -t tocs < <(find . -maxdepth 1 -name '*.toc' | sort)
+          if [[ ${#tocs[@]} -ne 1 || ${tocs[0]} != ./GuildCrafts_Camelot.toc ]]; then
+            echo "::error::Source TOCs after pruning: ${tocs[*]:-none}"; exit 1
+          fi
+          grep -Eq '^## Interface: 16[0-9]{3}[[:space:]]*$' GuildCrafts_Camelot.toc \
+            || { echo "::error::GuildCrafts_Camelot.toc Interface is not 16xxx"; exit 1; }
+          ! grep -q '^## Interface-' GuildCrafts_Camelot.toc \
+            || { echo "::error::Camelot TOC has ## Interface-[Type] lines"; exit 1; }
+
+      - name: Package without uploading
+        # No tokens in this step's env, so even a bug in -d cannot upload.
+        run: |
+          set -o pipefail
+          bash .packager/release.sh -d -g forever -r "$RUNNER_TEMP/release" 2>&1 | tee "$RUNNER_TEMP/stage1.log"
+
+      - name: Fail unless the package is Forever-only
+        run: |
+          set -euo pipefail
+          rel="$RUNNER_TEMP/release" log="$RUNNER_TEMP/stage1.log"
+          addon=GuildCrafts want="GuildCrafts/GuildCrafts_Camelot.toc"
+          fail() { echo "::error::forever-gate: $*"; exit 1; }
+
+          # What the packager will tag (release.sh:1476-1477).
+          mapfile -t gv < <(grep '^Game version: ' "$log")
+          [[ ${#gv[@]} -eq 1 ]] || fail "expected one 'Game version:' line, got ${#gv[@]}"
+          IFS=',' read -ra versions <<< "${gv[0]#Game version: }"
+          for v in "${versions[@]}"; do
+            v=${v// /}
+            [[ $v =~ ^1\.6[0-9]\.[0-9]+$ ]] || fail "non-Forever game version '$v' in: ${gv[0]}"
+          done
+          grep -q '^Build type: non-retail version-forever ' "$log" || fail "build type: $(grep '^Build type:' "$log")"
+
+          # The zip.
+          mapfile -t zips < <(find "$rel" -maxdepth 1 -name '*.zip')
+          [[ ${#zips[@]} -eq 1 ]] || fail "expected one zip, got ${#zips[@]}"
+          zip=${zips[0]}; listing=$(unzip -Z1 "$zip")
+          roots=$(cut -d/ -f1 <<< "$listing" | sort -u)
+          [[ $roots == "$addon" ]] || fail "zip top level: $(tr '\n' ' ' <<< "$roots")"
+          bad=$(grep -E '\.toc$' <<< "$listing" | grep -vxF "$want" | grep -v "^$addon/Libs/" || true)
+          [[ -z $bad ]] && grep -qxF "$want" <<< "$listing" || fail "zip TOCs wrong: ${bad:-Camelot TOC missing}"
+          ! grep -q "^$addon/Data/" <<< "$listing" || fail "zip contains $addon/Data/"
+          toc=$(unzip -p "$zip" "$want" | tr -d '\r')
+          grep -Eq '^## Interface: 16[0-9]{3}$' <<< "$toc" || fail "zipped TOC Interface: $(grep '^## Interface' <<< "$toc")"
+          ! grep -q '^## Interface-' <<< "$toc" || fail "zipped TOC has ## Interface-[Type] lines"
+          ctl=$(unzip -p "$zip" "$addon/Libs/AceComm-3.0/ChatThrottleLib.lua" | grep -Eo 'CTL_VERSION = [0-9]+' | grep -Eo '[0-9]+$')
+          (( ctl >= 32 )) || fail "ChatThrottleLib is v$ctl; Forever needs >= 32"
+
+          # The folder: the publish step zips this as-is.
+          mapfile -t ftocs < <(cd "$rel" && find "$addon" -name '*.toc' ! -path "$addon/Libs/*" | sort)
+          [[ ${#ftocs[@]} -eq 1 && ${ftocs[0]} == "$want" ]] || fail "package folder TOCs: ${ftocs[*]:-none}"
+          [[ ! -e $rel/$addon/Data ]] || fail "package folder contains Data/"
+          echo "forever-gate: OK (${gv[0]}; $(basename "$zip"); CTL v$ctl)"
+
+      - name: Keep the checked zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: guildcrafts-forever
+          path: ${{ runner.temp }}/release/*.zip
+
+      - name: Publish the checked package
+        if: env.PUBLISH == 'true'
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          # -c skips copying, -o keeps the folder the gate checked, so the zip is rebuilt from it.
+          bash .packager/release.sh -c -o -g forever -r "$RUNNER_TEMP/release" 2>&1 | tee "$RUNNER_TEMP/stage2.log"
+          mapfile -t ups < <(grep '^Uploading .* to https://wow.curseforge.com/' "$RUNNER_TEMP/stage2.log")
+          [[ ${#ups[@]} -ge 1 ]] || { echo "::error::No CurseForge upload. Is CF_API_KEY set?"; exit 1; }
+          for up in "${ups[@]}"; do
+            [[ $up =~ ^Uploading\ [^\ ]+\ \((1\.6[0-9]\.[0-9]+,?)+\ (release|beta|alpha)\)\ to ]] \
+              || { echo "::error::CurseForge got non-Forever versions: $up"; exit 1; }
+          done
+          grep -A1 '^Uploading .* to https://wow.curseforge.com/' "$RUNNER_TEMP/stage2.log" | grep -qx 'Success!' \
+            || { echo "::error::CurseForge did not report Success!"; exit 1; }

@@ -386,6 +386,66 @@ missing while `RE` fires means GuildCrafts didn't register it. B receives A's de
 
 ---
 
+## Packaging — Forever only
+
+`.github/workflows/release.yml` runs BigWigsMods/packager pinned at `e50a250f` (v2.6.1). It's
+the only way a GuildCrafts file reaches CurseForge project 1469206.
+
+### Why `.pkgmeta` alone isn't enough
+
+`release.sh` finds every `GuildCrafts{,_Vanilla,_TBC,_Wrath,_Cata,_Mists,_Camelot}.toc`
+(`release.sh:1389-1423`) and adds a game version for each (`:1343-1355`). That happens
+before `ignore:` is applied, which only runs while copying files (`:1852-1862`, `:2042`). In a
+dry run, ignoring the five TOCs produced a zip holding only `GuildCrafts_Camelot.toc` that
+was still tagged `5.5.4, 4.4.2, 3.4.3, 2.5.6, 1.60.1, 1.15.7`.
+
+### Mechanism and fail-safe
+
+| Layer | What it does | If it's missing |
+|---|---|---|
+| Strip | Deletes the five non-Forever TOCs and `Data/`, then requires exactly one TOC (`GuildCrafts_Camelot.toc`, Interface `16xxx`) | `-g forever` catches it |
+| `-g forever` | Only Forever interfaces count (`:294-336`, `:1353`). Any non-Forever TOC left over makes `release.sh` exit 1 (`:1314`) | The gate catches it |
+| `-d` stage | Packages with no upload and no tokens in env | — |
+| Gate | Fails unless the log shows exactly one `Game version:` line, all `1.6x.y`, and `Build type: non-retail version-forever`. Also fails unless the zip and the package folder hold only `GuildCrafts/GuildCrafts_Camelot.toc` (no `Data/`) and ChatThrottleLib is v32 or later | Nothing uploads |
+| Publish | Tag only. Re-zips the gated folder (`-c -o -g forever`) and checks that every `Uploading … (1.6x.y …)` line lists Forever versions only | — |
+
+Checked locally on 2026-10-02 against `a1c0554`:
+- Strip plus `-d -g forever` gave `Game version: 1.60.1`, `Build type: non-retail
+  version-forever`, and `GuildCrafts-a1c0554-forever.zip`. The gate printed `OK`.
+- The zip's TOC had `## Version: a1c0554` and `## X-Curse-Project-ID: 1469206`.
+- Without the strip, `-g forever` exited 1: `GuildCrafts.toc does not have an interface version
+  that is compatible with the game version "forever"`.
+- Not yet run on GitHub's runners, and no real upload has been made.
+
+### Draft-upload test plan
+
+CurseForge's upload API has no private draft. An `alpha` file is the most restricted upload:
+it's listed on the project's Files tab, but clients set to Release or Beta don't install it.
+If you want nothing visible at all, stop after step 3.
+
+1. **One-time setup on `lxhwes/GuildCrafts-Forever`.**
+   - Enable Actions (Settings → Actions → General), because forks start with them disabled.
+   - Create a CurseForge API token on your CurseForge account. You're an author on 1469206.
+   - Store it as a repo secret from your own terminal, not this chat:
+     `gh secret set CF_API_KEY --repo lxhwes/GuildCrafts-Forever`
+2. **Dry run.** After the PR is merged into the fork's `main`, run
+   `gh workflow run release.yml --repo lxhwes/GuildCrafts-Forever -f publish=false`,
+   then `gh run watch --repo lxhwes/GuildCrafts-Forever`. Expect a step log line
+   `forever-gate: OK (Game version: 1.60.1; GuildCrafts-<sha>-forever.zip; CTL v32)`.
+3. **Inspect the artifact.** Run `gh run download --repo lxhwes/GuildCrafts-Forever -n guildcrafts-forever`,
+   then `unzip -Z1 GuildCrafts-*-forever.zip | grep '\.toc$' | grep -v /Libs/`. Expect exactly
+   `GuildCrafts/GuildCrafts_Camelot.toc`.
+4. **Alpha upload.** Tag and push: `git tag v2.1.0-alpha1 && git push origin v2.1.0-alpha1`.
+   The workflow should end with `Uploading GuildCrafts-v2.1.0-alpha1-forever.zip (1.60.1 alpha)`
+   and `Success!`.
+5. **Check CurseForge.** On project 1469206 → Files, open the new file. Expect one game
+   version, WoW Forever `1.60.1`, and release type Alpha. Nothing should be tagged Classic,
+   TBC, Wrath, Cata or Mists. If anything else shows, delete or archive the file at once and
+   tell me what the file page lists.
+6. **Release.** Only after step 5 passes, tag `v2.1.0` for a release-type file.
+
+---
+
 ## Open questions — verify on live Forever
 
 1. **Client build** of the 2026-10-02 runs. `GetBuildInfo()` printed only the `1.60.1` version

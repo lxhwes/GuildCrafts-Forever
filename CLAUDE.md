@@ -18,12 +18,22 @@ via a DR/BDR election system over the GUILD addon message channel.
 
 ## Build & Release
 
-### Zip a release
-Always exclude `.DS_Store` — macOS creates it whenever Finder opens the folder:
+### Publishing: Forever only, through the release workflow
+Only the Forever flavor is published from this fork. That was the condition of the upstream
+author's permission (`docs/ORIGIN.md`), so no published file may ever be offered to another
+flavor. **Never upload a hand-made zip.** `zip -r GuildCrafts/` ships all six TOCs.
 
-```bash
-zip -r GuildCrafts-X.Y.Z.zip GuildCrafts/ -x "*.DS_Store"
-```
+`.github/workflows/release.yml` (BigWigs packager, pinned) is the only release path:
+- it deletes the five non-Forever TOCs and `Data/`;
+- it packages with `-d -g forever`, so a leftover non-Forever TOC makes `release.sh` exit;
+- it gates on the packager's `Game version:` line, the zip and the package folder before
+  anything uploads;
+- it publishes only from a `v*` tag. A tag name containing `alpha` or `beta` sets the
+  CurseForge release type.
+
+`.pkgmeta` `ignore:` keeps the same files out of local runs. It does **not** stop the packager
+tagging their flavors (`release.sh` reads TOCs before applying `ignore`), which is why the
+workflow deletes them. The draft-upload test plan is in `spec/migration-forever.md`.
 
 ### Version bump checklist
 These must match before committing a version bump:
@@ -66,7 +76,7 @@ Never commit, push, create a PR, or merge without explicit instruction from the 
 git push -u origin feature/patch-N-description
 gh pr create --title "feat: ..." --base main
 gh pr merge <num> --squash --delete-branch --subject "feat: ..."
-zip -r GuildCrafts-X.Y.Z.zip GuildCrafts/ -x "*.DS_Store"
+git tag vX.Y.Z && git push origin vX.Y.Z   # release workflow packages and uploads
 ```
 
 ---

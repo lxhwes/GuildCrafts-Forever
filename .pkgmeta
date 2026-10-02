@@ -1,0 +1,34 @@
+package-as: GuildCrafts
+
+enable-nolib-creation: no
+
+# The addon lives in GuildCrafts/ inside the repo; lift it to the zip root.
+move-folders:
+  GuildCrafts/GuildCrafts: GuildCrafts
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
+# Only the Forever flavor ships from this fork. The release workflow deletes the
+# non-Forever TOCs and Data/ before packaging, because ignore does not stop
+# release.sh reading their Interface for CurseForge tagging. These entries keep
+# them out of the zip on local runs.
+ignore:
+  - GuildCrafts/GuildCrafts.toc
+  - GuildCrafts/GuildCrafts_Vanilla.toc
+  - GuildCrafts/GuildCrafts_Wrath.toc
+  - GuildCrafts/GuildCrafts_Cata.toc
+  - GuildCrafts/GuildCrafts_Mists.toc
+  - GuildCrafts/Data
+  # The addon README describes the Classic addon and would overwrite the root
+  # README (with the attribution) during move-folders.
+  - GuildCrafts/README.md
+  - spec
+  - docs
+  - RFC
+  - tools
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - CURSEFORGE_DESCRIPTION.md
+  - ROADMAP.md
