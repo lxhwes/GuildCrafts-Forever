@@ -299,8 +299,10 @@ GuildCrafts prefixes its chat lines with `GuildCrafts:`; `[debug]` lines only pr
 Commands marked by tag (`RA`, `SP`, `RE`) are in `docs/ingame-commands.md`.
 
 **Who should be DR.** Election picks the lowest member key by plain byte order
-(`Comms.lua:291-301`). Get each key from the first line of `/gc dump` (`Local player: …`) and
-work out the expected DR before you start. Call the lower key LOW and the other HIGH.
+(`Comms.lua:291-301`). On Forever the key is the GUID (`Player-4619-…`). Get each key from the
+first line of `/gc dump` (`Local player: …`) and work out the expected DR before you start.
+Compare character by character after `Player-`. Call the lower key LOW and the other HIGH.
+`/gc comms` lists each addon user as `<name> <GUID>`.
 
 #### Setup
 
@@ -353,8 +355,11 @@ been opened on that character, or learn one new recipe from a trainer first.
 | P4 | B | `/gc`, then `<Prof>`, then A's name | The same N recipes |
 | P5–P7 | swap A and B | Repeat P2–P4 the other way | Same, mirrored |
 
-**Fail:** P3 prints nothing, or P4 shows a different count. Record the sender name exactly as
-P3 prints it; it shows whether AceComm's sender matches the key from S1 (F17).
+**Fail:** P3 prints nothing, or P4 shows a different count. P3 prints the sender after it has
+been resolved to a GUID, so it should equal A's key from S1. If B is on a different server
+prefix from A (`Player-4613-` vs `Player-4619-`), run `SND` on A first, then on B. A's listener
+stays armed, so A prints a second `SND` line with B's raw sender name as A's client sees it.
+P2–P4 in that direction show whether a whisper reaches them.
 
 #### R — Pause under a restriction
 
