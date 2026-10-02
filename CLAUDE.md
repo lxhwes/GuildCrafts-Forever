@@ -36,8 +36,11 @@ Three places must match before committing a version bump:
 | `GuildCrafts/GuildCrafts_Wrath.toc` | `## Version: X.Y.Z` |
 | `GuildCrafts/GuildCrafts_Cata.toc` | `## Version: X.Y.Z` |
 | `GuildCrafts/GuildCrafts_Mists.toc` | `## Version: X.Y.Z` |
-| `GuildCrafts/GuildCrafts_Camelot.toc` | `## Version: X.Y.Z` |
 | `CHANGELOG.md` | `## X.Y.Z — YYYY-MM-DD` |
+
+`GuildCrafts_Camelot.toc` (Forever) is not bumped by hand: its `## Version:` is
+`@project-version@`, filled in by the CurseForge packager. Forever reads the `_Camelot`
+suffix and ignores `_Forever` (verified in game, 1.60.1, 2026-10-02).
 
 `GuildCrafts.VERSION` (integer) and `GuildCrafts.DATA_FORMAT_VERSION` (integer)
 are wire protocol versions — only increment when the sync protocol changes.

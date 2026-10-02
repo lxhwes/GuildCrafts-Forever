@@ -6,7 +6,7 @@ flavor is maintained by Alex Howes with the author's permission; see
 
 A World of Warcraft Classic addon that builds a guild-wide recipe book — automatically scanning, storing, and syncing every learned recipe across all guild members.
 
-Supports Classic Era, TBC Anniversary, WotLK Classic, Cata Classic, and MoP Classic via multi-TOC.
+Supports Classic Era, TBC Anniversary, WotLK Classic, Cata Classic, MoP Classic, and WoW Forever via multi-TOC.
 
 ## Repository Structure
 
