@@ -273,6 +273,9 @@ after load, not whether the addon loads.
   `PROF` on the same day: slot 1 Alchemy, slot 2 Herbalism, slot 5 Cooking, slots 3, 4, 6 and 7
   empty. That matches the positions GuildCrafts reads.
 - **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified.
+- **Favorites store booleans.** `Modules/Favorites.lua` writes `favoriteRecipes[key] = true`
+  and `favoriteMembers[key] = true` to `GuildCraftsCharDB`. Under the 1/0 rule, those need a
+  round-trip check on Forever, or a switch to `1`. Not changed yet.
 
 ---
 
