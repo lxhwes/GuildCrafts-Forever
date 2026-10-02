@@ -1515,7 +1515,7 @@ end
 ----------------------------------------------------------------------
 
 function Comms:DumpStatus()
-    GuildCrafts:Printf("--- Comms Status ---")
+    GuildCrafts:Printf("--- Comms Status (GuildCrafts %s) ---", GuildCrafts.DISPLAY_VERSION)
     GuildCrafts:Printf("My role: %s", self.myRole)
     GuildCrafts:Printf("DR: %s", self.currentDR or "none")
     GuildCrafts:Printf("BDR: %s", self.currentBDR or "none")

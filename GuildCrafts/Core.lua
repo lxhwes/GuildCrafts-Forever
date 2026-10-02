@@ -15,8 +15,18 @@ local GuildCrafts = LibStub("AceAddon-3.0"):NewAddon(ADDON_NAME,
 -- Make it globally accessible for other files
 _G.GuildCrafts = GuildCrafts
 
--- Addon version — keep in sync with .toc and CurseForge
-GuildCrafts.DISPLAY_VERSION = "2.0.2"
+-- Addon version, read from the loaded TOC so it always matches the package.
+-- An unpackaged checkout still carries the packager token. Match its leading "@"
+-- only: the packager rewrites the full token in Lua files too.
+local function ReadDisplayVersion()
+    local getMetadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    if type(getMetadata) ~= "function" then return "unknown" end
+    local ok, value = pcall(getMetadata, ADDON_NAME, "Version")
+    if not ok or type(value) ~= "string" or value == "" then return "unknown" end
+    if value:sub(1, 1) == "@" then return "dev" end
+    return value
+end
+GuildCrafts.DISPLAY_VERSION = ReadDisplayVersion()
 
 -- Protocol version — integer used in sync envelope for compatibility checks.
 -- Bump when the wire format changes in a backward-incompatible way.

@@ -26,11 +26,10 @@ zip -r GuildCrafts-X.Y.Z.zip GuildCrafts/ -x "*.DS_Store"
 ```
 
 ### Version bump checklist
-Three places must match before committing a version bump:
+These must match before committing a version bump:
 
 | File | Field |
 |---|---|
-| `GuildCrafts/Core.lua` | `GuildCrafts.DISPLAY_VERSION = "X.Y.Z"` |
 | `GuildCrafts/GuildCrafts.toc` | `## Version: X.Y.Z` |
 | `GuildCrafts/GuildCrafts_Vanilla.toc` | `## Version: X.Y.Z` |
 | `GuildCrafts/GuildCrafts_Wrath.toc` | `## Version: X.Y.Z` |
@@ -41,6 +40,9 @@ Three places must match before committing a version bump:
 `GuildCrafts_Camelot.toc` (Forever) is not bumped by hand: its `## Version:` is
 `@project-version@`, filled in by the CurseForge packager. Forever reads the `_Camelot`
 suffix and ignores `_Forever` (verified in game, 1.60.1, 2026-10-02).
+
+`GuildCrafts.DISPLAY_VERSION` is read from the loaded TOC's `## Version:` at load, and reads
+`dev` when running unpackaged. `/gc comms` prints it on its first line.
 
 `GuildCrafts.VERSION` (integer) and `GuildCrafts.DATA_FORMAT_VERSION` (integer)
 are wire protocol versions — only increment when the sync protocol changes.

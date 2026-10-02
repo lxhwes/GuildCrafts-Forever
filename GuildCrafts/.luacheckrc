@@ -38,6 +38,9 @@ read_globals = {
     -- WoW API — Addon messaging
     "C_ChatInfo", "C_Timer", "C_GuildInfo",
 
+    -- WoW API — Addon metadata
+    "C_AddOns", "GetAddOnMetadata",
+
     -- WoW API — Trade skills
     "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink",
     "GetTradeSkillRecipeLink", "GetTradeSkillLine", "ExpandTradeSkillSubClass",
