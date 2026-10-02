@@ -6,6 +6,10 @@
 
   - **WoW Forever support** — new `GuildCrafts_Camelot.toc` (Interface 16001, beta). Forever reads the `_Camelot` suffix and prefers it over the unsuffixed TOC; the file carries the CurseForge project ID and takes its version from the packager. Forever runs the Mainline API, so item, spell, and recipe lookups now fall back to `C_Item`, `C_SpellBook`, and `C_TradeSkillUI.GetRecipeSchematic` where the Classic globals are gone. Guild chat messages delivered as secret values are ignored by `!gc`.
 
+  ### Improvements
+
+  - **Profession list follows the client** — Jewelcrafting and Inscription are hidden whenever the client's own profession skill lines don't include them, even if it reports a later expansion level. The expansion-level check still applies when that list isn't available.
+
   ### Fixes
 
   - **Forever members keyed by GUID** — Forever characters have a first name and a surname and no realm, so the old `Name-Realm` key never matched the guild roster. Every member would have been marked absent and tombstoned after 7 days. On Forever, GuildCrafts now keys members by GUID and reads names from the roster for display and whispers. Pre-GUID entries for your own character move to the new key automatically.

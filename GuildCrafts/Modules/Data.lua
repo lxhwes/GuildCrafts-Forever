@@ -306,6 +306,7 @@ function Data:OnInitialize()
 end
 
 function Data:OnEnable()
+    self:ApplyClientProfessionGate()
 end
 
 ----------------------------------------------------------------------
@@ -2187,6 +2188,50 @@ end
 local PROF_NAMES = {}
 for _, n in ipairs(PRIMARY_PROF_NAMES)   do PROF_NAMES[#PROF_NAMES + 1] = n end
 for _, n in ipairs(SECONDARY_PROF_NAMES) do PROF_NAMES[#PROF_NAMES + 1] = n end
+
+local function RemoveName(list, name)
+    for i = #list, 1, -1 do
+        if list[i] == name then table.remove(list, i) end
+    end
+end
+
+-- Professions the expansion-level check keeps that a client may still not have.
+local EXPANSION_GATED = { "Jewelcrafting", "Inscription" }
+
+--- Drop Jewelcrafting and Inscription when the client's own profession skill lines
+--- don't include them. Covers a Classic+ client that raises its expansion level
+--- without adding them. Only narrows, and does nothing when the list is unavailable
+--- or empty, so the expansion-level check above stays the fallback.
+function Data:ApplyClientProfessionGate()
+    local tradeSkill = C_TradeSkillUI
+    if not (tradeSkill and tradeSkill.GetAllProfessionTradeSkillLines
+            and tradeSkill.GetProfessionInfoBySkillLineID) then return end
+    local okLines, lines = pcall(tradeSkill.GetAllProfessionTradeSkillLines)
+    if not okLines or type(lines) ~= "table" or #lines == 0 then return end
+
+    local present = {}
+    for _, skillLineID in ipairs(lines) do
+        local okInfo, info = pcall(tradeSkill.GetProfessionInfoBySkillLineID, skillLineID)
+        if okInfo and type(info) == "table" then
+            for _, name in ipairs({ info.professionName, info.parentProfessionName }) do
+                if type(name) == "string" and not (issecretvalue and issecretvalue(name)) then
+                    present[self:GetCanonicalProfName(name)] = true
+                end
+            end
+        end
+    end
+    if next(present) == nil then return end
+
+    for _, profName in ipairs(EXPANSION_GATED) do
+        if TRACKED_PROFESSIONS[profName] and not present[profName] then
+            TRACKED_PROFESSIONS[profName] = nil
+            PROFESSION_SPELL_IDS[profName] = nil
+            RemoveName(PRIMARY_PROF_NAMES, profName)
+            RemoveName(PROF_NAMES, profName)
+            GuildCrafts:Debug("Profession gate: client has no", profName, "skill line — not tracked")
+        end
+    end
+end
 
 ----------------------------------------------------------------------
 -- Member Data Accessors (for UI)

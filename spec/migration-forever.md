@@ -23,7 +23,7 @@ round-trip is proven on Forever.
 | Area | Type | Status |
 |------|------|--------|
 | TOC suffix — ship `_Camelot`, drop `_Forever` | Mechanical | Done (`0e373e7`), verified in game |
-| Profession pruning (`GetClassicExpansionLevel`) | None needed | Verified in game |
+| Profession pruning (`GetClassicExpansionLevel`) | Gate added on client skill lines | Expansion level verified in game; gate inputs verified (`PSL`) |
 | Expansion filter / recipe tagging with no `Data_*.lua` | None needed | Verified in game: no buttons, no Lua errors |
 | SyncPausePolicy — Forever addon restrictions | Extend existing module | Implemented; API verified in game, encounter event not yet |
 | Version bump | None | `@project-version@`, packager-filled; `DISPLAY_VERSION` reads it |
@@ -121,7 +121,7 @@ Skinning and Cooking.
 
 **None.** The check reads a value the client reports; it isn't keyed on the interface number.
 
-### Accepted risk
+### Risk and gate
 
 Forever is Classic+. Blizzard could raise the reported expansion level while still shipping no
 Jewelcrafting or Inscription. The `< 1` and `< 2` checks would then stop pruning, and both
@@ -143,6 +143,10 @@ would come back as tracked professions that don't exist.
   **Jewelcrafting and Inscription are absent**, so the list can gate them. Cooking, First Aid
   and Fishing are also absent: secondary skills aren't in this list, so a gate may only use it
   for primary professions.
+- **Gate (implemented).** `Data:ApplyClientProfessionGate`, run from `Data:OnEnable`, drops
+  Jewelcrafting and Inscription when the client's skill-line list is non-empty and names
+  neither. It only narrows the expansion-level result. If the list is missing or empty, the
+  expansion-level check stands.
 
 ---
 
