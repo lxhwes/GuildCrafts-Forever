@@ -14,6 +14,7 @@ Libs\embeds.xml
 # Core modules
 Core.lua
 Modules\Data.lua
+Modules\ForeverIdentity.lua
 Modules\SyncPausePolicy.lua
 Modules\Comms.lua
 Modules\Favorites.lua

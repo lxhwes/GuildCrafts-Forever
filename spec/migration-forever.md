@@ -241,7 +241,16 @@ after load, not whether the addon loads.
     matches `UnitGUID("player")`.
   - The guild spans servers: one member's GUID starts `Player-4613-`, the rest `Player-4619-`.
   - `GetRealmName()` is `Classic Beta PvP`; `GetNormalizedRealmName()` is `ClassicBetaPVP`.
-    GuildCrafts' own normalisation gives `ClassicBetaPvP`, so the two differ in case.
+    GuildCrafts' own normalisation gives `ClassicBetaPvP`, so the two differ in case. Forever
+    has no realms; it is split only by ruleset (PvP or PvE), so `GetRealmName()` names the
+    ruleset.
+  - **Fixed:** `Modules/ForeverIdentity.lua`, loaded only from the Camelot TOC, keys members by
+    GUID. Senders and roster rows resolve to GUIDs through the roster, and names are read back
+    for display and whispers. Classic flavors keep `Name-Realm`, using the defaults in
+    `Data:GetMemberName`, `Data:GetWhisperTarget` and `Data:RosterMemberKey`.
+  - Still unverified: the sender name for a guildmate on another server (GUID prefix 4613 vs
+    4619), and whether an addon whisper to `First Surname` reaches them. The two-client
+    checklist covers both.
 - **ChatThrottleLib v31 taint (F18).** Its `SendChatMessage` hook calls `strlen` on secret
   chat values. v32 has the `issecretvalue` guard.
 - **Empty profession read purges data (F19), fallback confirmed absent in game 2026-10-02.**

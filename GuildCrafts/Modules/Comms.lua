@@ -157,6 +157,7 @@ function Comms:OnLoginReady()
     if not IsInGuild() then return end
 
     local playerKey = GuildCrafts.Data:GetPlayerKey()
+    if not playerKey then return end
 
     -- Add self to user list
     self.addonUsers[playerKey] = {

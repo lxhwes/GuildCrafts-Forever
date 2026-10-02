@@ -8,6 +8,7 @@
 
   ### Fixes
 
+  - **Forever members keyed by GUID** — Forever characters have a first name and a surname and no realm, so the old `Name-Realm` key never matched the guild roster. Every member would have been marked absent and tombstoned after 7 days. On Forever, GuildCrafts now keys members by GUID and reads names from the roster for display and whispers. Pre-GUID entries for your own character move to the new key automatically.
   - **No more profession purges from a bad read** — a profession that holds recipes is no longer deleted, or announced as dropped to the guild, just because the client's profession read came back empty or short. Forever has no skill-line fallback, so one empty read used to purge every profession for every guildmate. GuildCrafts now keeps the data, retries the read, and prints a hint; `/gc drop <profession>` is the only way to remove one. Peers ignore removals that don't come from `/gc drop` or are older than their copy, and a sync can no longer replace a profession's recipes with nothing.
 
   ## 2.0.2 — 2026-09-08

@@ -417,7 +417,8 @@ function Data:RebuildOnlineCache()
     end
 
     -- Always mark self as online (roster may not include us on early fires)
-    self._onlineCache[self:GetPlayerKey()] = true
+    local playerKey = self:GetPlayerKey()
+    if playerKey then self._onlineCache[playerKey] = true end
 end
 
 function Data:IsMemberOnline(memberKey)

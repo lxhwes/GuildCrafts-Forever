@@ -132,6 +132,7 @@ GuildCrafts/
   GuildCrafts_Camelot.toc  -- WoW Forever (Mainline API)
   Modules/
     Data.lua               -- Scanning, merging, pruning, compat wrappers
+    ForeverIdentity.lua    -- Forever only (Camelot TOC): GUID member keys, roster names
     Comms.lua              -- Sync protocol, DR/BDR election
     SyncPausePolicy.lua    -- Combat/instance pause
     Favorites.lua          -- Bookmark system

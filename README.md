@@ -18,6 +18,7 @@ The addon itself. This is the folder you drop into `World of Warcraft/_classic_/
 |---|---|
 | `Core.lua` | Entry point — addon initialisation, event routing, slash commands |
 | `Modules/Data.lua` | Recipe scanning, profession detection, expansion classification, data storage, merge logic |
+| `Modules/ForeverIdentity.lua` | WoW Forever only: keys members by GUID and reads display names from the guild roster |
 | `Modules/Comms.lua` | Network layer — DR/BDR election, sync protocol, delta updates, craft messages |
 | `Modules/SyncPausePolicy.lua` | Pause gate — suppresses outgoing sync during combat, instances, and zone transitions |
 | `Modules/Tooltip.lua` | Item tooltip hook — shows guild crafters on hover |
