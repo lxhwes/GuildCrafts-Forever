@@ -1,5 +1,9 @@
 # GuildCrafts
 
+GuildCrafts is by [dkruenbo](https://github.com/dkruenbo/GuildCrafts). The WoW Forever
+flavor is maintained by Alex Howes with the author's permission; see
+[docs/ORIGIN.md](docs/ORIGIN.md). Licensed under MIT, see [LICENSE](LICENSE).
+
 A World of Warcraft Classic addon that builds a guild-wide recipe book — automatically scanning, storing, and syncing every learned recipe across all guild members.
 
 Supports Classic Era, TBC Anniversary, WotLK Classic, Cata Classic, and MoP Classic via multi-TOC.
