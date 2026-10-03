@@ -120,7 +120,9 @@ election code. The summary below is the short version.
 
 ## Planned Work
 
-`spec/implementation-plan-v2.md` is the source of truth for all planned patches.
+`spec/forever-plan.md` is the source of truth for planned Forever work: phases to the
+Nov 4 launch, open questions, decisions, and the fork-review finding index (F#, C#).
+`spec/implementation-plan-v2.md` is upstream's patch history.
 
 Current status:
 - ✅ Patch 1 — SyncPausePolicy + Partial Scan Protection (v1.4.0)

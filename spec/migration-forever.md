@@ -175,7 +175,7 @@ doesn't depend on booleans round-tripping.
 
 **None.** Every recipe is filed under "Vanilla" internally, but no button or label shows the
 tag, so users can't see it. Telling new Forever recipes apart is recipe-data work, which is
-out of scope (spec/fork-review.md C5).
+out of scope (C5 in `spec/forever-plan.md`).
 
 ---
 
@@ -215,7 +215,8 @@ On Classic clients `C_RestrictedActions` is nil, so those flavors are unaffected
 
 Not included, pending a decision: holding `HELLO`/`HEARTBEAT`/`GC_ACK` during a Chat
 restriction, keeping the DR watchdog fresh under Map or Chat, keeping `!gc` silent under a
-restriction, and a grace period after a restriction lifts.
+restriction, and a grace period after a restriction lifts. These wait on the `RE` result (H8 in
+`spec/forever-plan.md`).
 
 ---
 
@@ -231,7 +232,8 @@ restriction, and a grace period after a restriction lifts.
 
 ## Forever-specific edge cases (known, not in this guide's scope)
 
-These come from `spec/fork-review.md` and legacynext's in-game notes. They affect behaviour
+These come from the 2026-09-28 fork review and legacynext's in-game notes. Finding IDs (F#, C#)
+are indexed, with current status, in `spec/forever-plan.md`. They affect behaviour
 after load, not whether the addon loads.
 
 - **Identity (F17), verified in game 2026-10-02.**
@@ -289,10 +291,11 @@ after load, not whether the addon loads.
   **Local verification:** `tools/test-profession-sync.lua` passed all 28 checks on Lua
   5.1.5; `luac -p` passed for Core, Data, Comms and the regression script. In-game results
   for these fixes have not been supplied.
-- **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified.
+- **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified. Planned
+  as H7.
 - **Favorites store booleans.** `Modules/Favorites.lua` writes `favoriteRecipes[key] = true`
   and `favoriteMembers[key] = true` to `GuildCraftsCharDB`. Under the 1/0 rule, those need a
-  round-trip check on Forever, or a switch to `1`. Not changed yet.
+  round-trip check on Forever, or a switch to `1`. Not changed yet; planned as H13.
 
 ---
 
@@ -487,7 +490,10 @@ If you want nothing visible at all, stop after step 3.
 
 ---
 
-## Open questions — verify on live Forever
+## Question log
+
+Answers and partial answers from the in-game runs. Questions still open are tracked as Q1–Q7
+in `spec/forever-plan.md`.
 
 1. **Client build** of the 2026-10-02 runs. `GetBuildInfo()` printed only the `1.60.1` version
    string; the build number (second return) wasn't captured.
