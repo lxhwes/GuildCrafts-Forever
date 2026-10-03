@@ -15,17 +15,27 @@ local GuildCrafts = LibStub("AceAddon-3.0"):NewAddon(ADDON_NAME,
 -- Make it globally accessible for other files
 _G.GuildCrafts = GuildCrafts
 
--- Addon version — keep in sync with .toc and CurseForge
-GuildCrafts.DISPLAY_VERSION = "2.0.2"
+-- Addon version, read from the loaded TOC so it always matches the package.
+-- An unpackaged checkout still carries the packager token. Match its leading "@"
+-- only: the packager rewrites the full token in Lua files too.
+local function ReadDisplayVersion()
+    local getMetadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    if type(getMetadata) ~= "function" then return "unknown" end
+    local ok, value = pcall(getMetadata, ADDON_NAME, "Version")
+    if not ok or type(value) ~= "string" or value == "" then return "unknown" end
+    if value:sub(1, 1) == "@" then return "dev" end
+    return value
+end
+GuildCrafts.DISPLAY_VERSION = ReadDisplayVersion()
 
 -- Protocol version — integer used in sync envelope for compatibility checks.
 -- Bump when the wire format changes in a backward-incompatible way.
-GuildCrafts.VERSION = 2
+GuildCrafts.VERSION = 3
 GuildCrafts.ADDON_PREFIX = "GuildCrafts"
 
 -- Data format version — bump when sync payload structure changes
 -- (e.g. adding reagents to sync). Forces re-pull of stale copies.
-GuildCrafts.DATA_FORMAT_VERSION = 2
+GuildCrafts.DATA_FORMAT_VERSION = 3
 
 -- Debug mode toggle
 GuildCrafts.debugMode = false
@@ -249,7 +259,7 @@ function GuildCrafts:FormatCraftersLine(crafters, prefix, maxNames, extraReserve
     for i = 1, #sorted do
         if shown >= cap then break end
         local c    = sorted[i]
-        local name = c.key:match("^(.+)-") or c.key
+        local name = self.Data:GetMemberName(c.key)
         local isOn = self.Data:IsMemberOnline(c.key)
         if isOn then name = name .. " (online)" end
 
@@ -307,6 +317,10 @@ GuildCrafts._gcLastAddonAck = 0
 --- respond first — prevents double-posting when the DR is in a BG/dungeon.
 --- The guild-chat echo acts as the cross-client deduplication signal.
 function GuildCrafts:OnGuildChatMessage(_event, msg)
+    -- Mainline-API clients (Forever) deliver chat as secret values in restricted
+    -- contexts; string ops on them error.
+    if issecretvalue and issecretvalue(msg) then return end
+
     -- Track any [GuildCrafts] response so fallback timers can detect it.
     if msg:sub(1, 13) == "[GuildCrafts]" then
         self._gcLastGuildCraftsMsg = GetTime()
@@ -498,6 +512,12 @@ function GuildCrafts:SlashHandler(input)
         self:Print("Wiping all SavedVariables and reloading...")
         GuildCraftsDB = nil
         ReloadUI()
+    elseif input == "drop" or input:match("^drop%s") then
+        if self.Data then
+            self.Data:DropProfession(input:match("^drop%s+(.+)$"))
+        else
+            self:Print("Data module not loaded.")
+        end
     elseif input == "minimap" then
         if self.MinimapButton then
             self.MinimapButton:Toggle()
@@ -505,7 +525,7 @@ function GuildCrafts:SlashHandler(input)
             self:Print("MinimapButton module not loaded.")
         end
     else
-        self:Print("Commands: /gc, /gc debug, /gc dump, /gc comms, /gc mem, /gc minimap, /gc reset")
+        self:Print("Commands: /gc, /gc debug, /gc dump, /gc comms, /gc mem, /gc minimap, /gc reset, /gc drop <profession>")
     end
 end
 

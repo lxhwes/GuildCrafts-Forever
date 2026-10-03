@@ -11,7 +11,8 @@ GuildCrafts.Tooltip = Tooltip
 local pairs = pairs
 local type = type
 local tonumber = tonumber
-local GetItemInfo = GetItemInfo
+-- Mainline-API clients (Forever) removed the GetItemInfo global
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
 ----------------------------------------------------------------------
 -- Reverse Lookup Index
@@ -174,7 +175,7 @@ function Tooltip:OnTooltipSetItem(tooltip, data)
             break
         end
 
-        local name = crafter.key:match("^(.+)-") or crafter.key
+        local name = GuildCrafts.Data:GetMemberName(crafter.key)
         local isOnline = GuildCrafts.Data:IsMemberOnline(crafter.key)
         local specSuffix = crafter.spec and (" [" .. crafter.spec .. "]") or ""
 

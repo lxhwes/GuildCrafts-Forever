@@ -1,8 +1,12 @@
 # GuildCrafts
 
+GuildCrafts is by [dkruenbo](https://github.com/dkruenbo/GuildCrafts). The WoW Forever
+flavor is maintained by Alex Howes with the author's permission; see
+[docs/ORIGIN.md](docs/ORIGIN.md). Licensed under MIT, see [LICENSE](LICENSE).
+
 A World of Warcraft Classic addon that builds a guild-wide recipe book — automatically scanning, storing, and syncing every learned recipe across all guild members.
 
-Supports Classic Era, TBC Anniversary, WotLK Classic, Cata Classic, and MoP Classic via multi-TOC.
+Supports Classic Era, TBC Anniversary, WotLK Classic, Cata Classic, MoP Classic, and WoW Forever via multi-TOC.
 
 ## Repository Structure
 
@@ -14,6 +18,7 @@ The addon itself. This is the folder you drop into `World of Warcraft/_classic_/
 |---|---|
 | `Core.lua` | Entry point — addon initialisation, event routing, slash commands |
 | `Modules/Data.lua` | Recipe scanning, profession detection, expansion classification, data storage, merge logic |
+| `Modules/ForeverIdentity.lua` | WoW Forever only: keys members by GUID and reads display names from the guild roster |
 | `Modules/Comms.lua` | Network layer — DR/BDR election, sync protocol, delta updates, craft messages |
 | `Modules/SyncPausePolicy.lua` | Pause gate — suppresses outgoing sync during combat, instances, and zone transitions |
 | `Modules/Tooltip.lua` | Item tooltip hook — shows guild crafters on hover |
@@ -45,3 +50,4 @@ Design documents and planning files. Not part of the addon — these are referen
 | `migration-classic-era.md` | Classic Era (1.15.x) compatibility notes |
 | `migration-wotlk.md` | WotLK Classic (3.4.x) compatibility notes |
 | `migration-mop.md` | MoP Classic (5.5.x) compatibility notes |
+| `migration-forever.md` | WoW Forever (1.60.x) compatibility notes |

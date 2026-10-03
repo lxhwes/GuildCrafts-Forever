@@ -89,19 +89,30 @@ GuildCraftsCharDB
             skillLevel    = 375,       -- current skill level at last scan
             maxSkillLevel = 375,       -- skill cap at last scan
             specialisation = "Elixir Master",  -- or nil
+            lastUpdate = 1700000000,  -- revision of this profession's latest update
         },
         ...
     },
     lastUpdate  = 1700000000,  -- Unix timestamp of most recent scan
-    dataFormat  = 2,           -- DATA_FORMAT_VERSION at last sync/scan
+    dataFormat  = 3,           -- DATA_FORMAT_VERSION at last sync
+    dropped = { ["Alchemy"] = 1699999000 },  -- retained explicit drop history
     _absentSince = nil,        -- set when member first disappears from roster
 }
 ```
 
-**`lastUpdate`** is the single source of truth for merge precedence. It is
-updated whenever a scan discovers new recipes, a profession is dropped, or
-a `DELTA_UPDATE touch` is applied. The local player's own `lastUpdate` is
-never overwritten by incoming sync data.
+**`lastUpdate`** orders member-level replacements. Local mutations use
+`max(time(), previous lastUpdate + 1)` to distinguish changes in the same second.
+No-change scans refresh it without moving it backwards. The local player's own
+`lastUpdate` is never overwritten by incoming sync data.
+
+**`dropped`** stores the last explicit `/gc drop` revision per profession. It is
+retained after relearning and included in snapshots and recipe deltas. A larger drop
+revision starts a new recipe generation. Older snapshots cannot erase known history.
+
+**Profession `lastUpdate`** orders removals against updates to that profession,
+independently of other professions. Legacy entries without this field use the member
+timestamp as a baseline when accessed. A removal at an equal timestamp is accepted
+unless its drop revision was already recorded; a later profession update blocks it.
 
 **`dataFormat`** is written when receiving sync data. It is used during the
 version-vector diff to identify entries that need a re-pull even when their
@@ -220,6 +231,8 @@ During `ProcessSyncRequest` (RFC-0002 §5.2):
 - If timestamps are equal but the local `dataFormat` is lower than
   `DATA_FORMAT_VERSION`: the member key is added to SYNC\_PULL to force a
   schema-upgrade push.
+- At equal timestamps, entries with drop history are exchanged in both directions.
+  The requester's own entry is pulled even if the DR has not seen its history.
 
 ---
 
@@ -271,6 +284,11 @@ incomingEntry.lastUpdate == localEntry.lastUpdate
     AND incomingEntry.dataFormat > localEntry.dataFormat
 ```
 
+At equal member revisions, previously unseen drop markers are reconciled per
+profession without replacing unrelated data. A newer drop permits an empty or smaller
+recipe set. Within the same generation, empty incoming professions retain stored
+recipes, and older incoming drop history cannot replace a newer generation.
+
 **Own-data guard:** the local player's own entry is never overwritten.
 Synced payloads strip reagent/cooldown data, so the local scan is always
 more complete.
@@ -285,13 +303,17 @@ more complete.
 Called for individual recipe additions from DELTA\_UPDATE. Adds a single
 recipe to a member's profession entry. A tombstone blocks the delta unless
 the delta's `lastUpdate` is strictly newer (resurrection case).
+Version 3 recipe deltas carry the profession's last drop revision. A newer revision
+clears the old recipe set once; remaining recipes in the same delta accumulate normally.
+Deltas from older generations or at/before the known drop are rejected.
 
 ### 9.3 Partial-Scan Guard
 
 Before applying a winning entry in a full merge, the incoming recipe counts
 are compared against the local counts per profession. If any profession in
 the incoming data has more than 0 recipes but fewer than **50%** of the
-locally stored count, the merge is blocked and a debug message is emitted.
+locally stored count **within the same drop/relearn generation**, the merge is blocked
+and a debug message is emitted. A later explicit drop bypasses this count comparison.
 This prevents a partially scanned entry from overwriting a complete local
 copy.
 
@@ -341,7 +363,7 @@ versions) are hard-deleted for any member other than the local player.
 
 ## 11. Data Format Versioning
 
-`GuildCrafts.DATA_FORMAT_VERSION` (integer, currently 2) tracks breaking
+`GuildCrafts.DATA_FORMAT_VERSION` (integer, currently 3) tracks breaking
 changes to the per-member sync payload schema. It is:
 
 - Written into `entry.dataFormat` when sync data is stored.
@@ -380,5 +402,5 @@ so they persist across all profiles and characters.
 | `INACTIVE_MEMBER_THRESHOLD` | 45 days | No-scan threshold for still-in-guild members before hard-delete. |
 | `TOUCH_BROADCAST_THRESHOLD` | 25 days | Data age above which a no-new-recipes scan broadcasts a timestamp touch. |
 | `TOMBSTONE_EXPIRY` | 30 days | Age after which a tombstone is hard-deleted. |
-| `DATA_FORMAT_VERSION` | 2 | Current member entry schema version. |
+| `DATA_FORMAT_VERSION` | 3 | Current member entry schema version. |
 | Partial-scan ratio | 50% | Minimum ratio of incoming:existing recipe count to accept a merge. |

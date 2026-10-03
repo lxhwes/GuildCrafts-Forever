@@ -10,6 +10,10 @@ local GuildCrafts = _G.GuildCrafts
 GuildCrafts.UI = GuildCrafts.UI or {}
 local UI = GuildCrafts.UI
 
+-- Mainline-API clients (Forever) removed these globals
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+local GetSpellLink = (C_Spell and C_Spell.GetSpellLink) or GetSpellLink
+
 -- Frame dimensions
 local DEFAULT_WIDTH  = 820
 local DEFAULT_HEIGHT = 540
@@ -884,7 +888,7 @@ function UI:NavigateToMembers(profName)
                     staleTag = staleTag .. "  |cff999999(left guild)|r"
                 end
             end
-            local label = dot .. memberInfo.key:match("^(.+)-") .. skillTag .. specTag .. staleTag
+            local label = dot .. GuildCrafts.Data:GetMemberName(memberInfo.key) .. skillTag .. specTag .. staleTag
             local row = self:CreateLeftRow(self.leftContent, yOffset, label)
             row.memberKey = memberInfo.key
             row:SetScript("OnClick", function()
@@ -957,7 +961,7 @@ function UI:ShowMemberRecipes(memberKey, profName)
     -- Header
     local header = self.detailContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", self.detailContent, "TOPLEFT", 8, -8)
-    local headerText = memberKey:match("^(.+)-") .. " — " .. profName
+    local headerText = GuildCrafts.Data:GetMemberName(memberKey) .. " — " .. profName
     local profData = entry.professions[profName]
     if profData.skillLevel and profData.maxSkillLevel then
         headerText = headerText .. "  " .. profData.skillLevel .. "/" .. profData.maxSkillLevel
@@ -1346,7 +1350,7 @@ function UI:ShowSearchResults(results)
         local cParts = {}
         for i = 1, math.min(total, 2) do
             local c = displayCrafters[i]
-            local cname = c.key:match("^(.+)-") or c.key
+            local cname = GuildCrafts.Data:GetMemberName(c.key)
             if c.key == myKey then
                 cname = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:10:10:0:0|t" .. cname
             end
@@ -1395,7 +1399,7 @@ function UI:ShowSearchResults(results)
                 GameTooltip:AddLine(capturedName, 1, 0.82, 0)
                 GameTooltip:AddLine(" ")
                 for _, c in ipairs(capturedCrafters) do
-                    local cname  = c.key:match("^(.+)-") or c.key
+                    local cname  = GuildCrafts.Data:GetMemberName(c.key)
                     local isSelf = (c.key == capturedMyKey)
                     local isOn   = GuildCrafts.Data:IsMemberOnline(c.key)
                     local line   = (isSelf and "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:10:10:0:0|t" or "  ") .. cname
@@ -1513,7 +1517,7 @@ function UI:FilterMemberList(query)
     local members = {}
     for memberKey, entry in pairs(db) do
         if type(entry) == "table" and entry.lastUpdate and not entry._tombstone
-                and memberKey:lower():find(query, 1, true) then
+                and (memberKey .. " " .. GuildCrafts.Data:GetMemberName(memberKey)):lower():find(query, 1, true) then
             local totalRecipes = 0
             for _, profData in pairs(entry.professions or {}) do
                 for _ in pairs(profData.recipes or {}) do totalRecipes = totalRecipes + 1 end
@@ -1527,7 +1531,7 @@ function UI:FilterMemberList(query)
     local yOffset = 0
     for _, memberInfo in ipairs(members) do
         local dot, isOnline, isAddon = MemberDotState(memberInfo.key)
-        local label = dot .. memberInfo.key:match("^(.+)-")
+        local label = dot .. GuildCrafts.Data:GetMemberName(memberInfo.key)
         local row = self:CreateLeftRow(self.leftContent, yOffset, label, memberInfo.recipeCount .. " rec")
         SetMemberDotTooltip(row, isOnline, isAddon)
         self.leftRows[#self.leftRows + 1] = row
@@ -1648,7 +1652,7 @@ function UI:PopulateFavMembers(yOffset)
 
     for _, info in ipairs(members) do
         local dot, isOnline, isAddon = MemberDotState(info.key)
-        local label = dot .. info.key:match("^(.+)-")
+        local label = dot .. GuildCrafts.Data:GetMemberName(info.key)
         local row = self:CreateLeftRow(self.leftContent, yOffset, label)
         row.memberKey = info.key
 
@@ -1825,7 +1829,7 @@ function UI:ShowFavRecipesDetail(grouped, filterProf)
             -- Crafters list
             for _, crafter in ipairs(recipe.crafters) do
                 local dot = crafter.online and "|cff00ff00O|r " or "|cff666666O|r "
-                local crafterName = crafter.key:match("^(.+)-") or crafter.key
+                local crafterName = GuildCrafts.Data:GetMemberName(crafter.key)
                 local crafterText = self.detailContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                 crafterText:SetPoint("TOPLEFT", self.detailContent, "TOPLEFT", 24, yOffset)
                 crafterText:SetText(dot .. crafterName)
@@ -1910,7 +1914,7 @@ function UI:ShowGatheringMemberDetail(memberKey, profName, entry)
     -- Header: MemberName — ProfName  skill/max
     local header = self.detailContent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", self.detailContent, "TOPLEFT", 8, -8)
-    local headerText = memberKey:match("^(.+)-") .. " — " .. profName
+    local headerText = GuildCrafts.Data:GetMemberName(memberKey) .. " — " .. profName
     if profData.skillLevel and profData.maxSkillLevel then
         headerText = headerText .. "  " .. profData.skillLevel .. "/" .. profData.maxSkillLevel
     end
@@ -1980,7 +1984,8 @@ end
 
 --- Pre-fill a whisper to a crafter in the chat edit box.
 function UI:OpenWhisper(charKey, itemName)
-    local name = charKey:match("^(.+)-") or charKey
+    local name = GuildCrafts.Data:GetWhisperTarget(charKey)
+    if not name then return end
     ChatFrame_OpenChat("/w " .. name .. " Can you craft " .. itemName .. " for me?")
 end
 
@@ -2067,7 +2072,7 @@ function UI:ShowWhisperPicker(anchor, targets, itemName)
     picker:EnableMouse(true)
 
     for i, c in ipairs(targets) do
-        local cname = c.key:match("^(.+)-") or c.key
+        local cname = GuildCrafts.Data:GetMemberName(c.key)
         local isOn  = GuildCrafts.Data:IsMemberOnline(c.key)
         local row = CreateFrame("Button", nil, picker, "BackdropTemplate")
         row:SetSize(126, rowH)
@@ -2397,12 +2402,8 @@ function UI:LinkRecipeToChat(recipeKey)
     local link
     if k > 0 then
         link = select(2, GetItemInfo(k))
-    elseif k < 0 then
-        if C_Spell and C_Spell.GetSpellLink then
-            link = C_Spell.GetSpellLink(-k)
-        elseif GetSpellLink then
-            link = GetSpellLink(-k)
-        end
+    elseif k < 0 and GetSpellLink then
+        link = GetSpellLink(-k)
     end
     if link then
         ChatEdit_InsertLink(link)
@@ -2428,7 +2429,7 @@ function UI:ShowRecipeTooltip(owner, recipeKey)
             return
         end
         -- Fallback for clients where SetSpellByID is unavailable
-        local link = GetSpellLink(-k)
+        local link = GetSpellLink and GetSpellLink(-k)
         if link then
             GameTooltip:SetHyperlink(link)
             GameTooltip:Show()
@@ -2876,7 +2877,7 @@ function UI:ShowRecipesView(profName)
         local parts = {}
         for i = 1, math.min(total, 2) do
             local c    = displayCrafters[i]
-            local name = c.key:match("^(.+)-") or c.key
+            local name = GuildCrafts.Data:GetMemberName(c.key)
             if c.key == myKey then
                 name = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:10:10:0:0|t" .. name
             end
@@ -2926,7 +2927,7 @@ function UI:ShowRecipesView(profName)
                 GameTooltip:AddLine(capturedName, 1, 0.82, 0)
                 GameTooltip:AddLine(" ")
                 for _, c in ipairs(capturedCrafters) do
-                    local cname  = c.key:match("^(.+)-") or c.key
+                    local cname  = GuildCrafts.Data:GetMemberName(c.key)
                     local isSelf = (c.key == capturedMyKey)
                     local isOn   = GuildCrafts.Data:IsMemberOnline(c.key)
                     local line   = (isSelf and "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:10:10:0:0|t" or "  ") .. cname

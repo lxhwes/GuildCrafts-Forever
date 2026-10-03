@@ -1,5 +1,24 @@
   # Changelog
 
+  ## Unreleased
+
+  ### New features
+
+  - **WoW Forever support** — new `GuildCrafts_Camelot.toc` (Interface 16001, beta). Forever reads the `_Camelot` suffix and prefers it over the unsuffixed TOC; the file carries the CurseForge project ID and takes its version from the packager. Forever runs the Mainline API, so item, spell, and recipe lookups now fall back to `C_Item`, `C_SpellBook`, and `C_TradeSkillUI.GetRecipeSchematic` where the Classic globals are gone. Guild chat messages delivered as secret values are ignored by `!gc`.
+
+  ### Improvements
+
+  - **Sync pauses under Forever addon restrictions** — outgoing sync also waits while the client reports an Encounter, Challenge Mode, PvP match, Map or Chat restriction. It picks up restrictions already active after a `/reload`. Classic clients are unaffected.
+  - **Version shown in `/gc comms`** — the first line now shows the version read from the loaded TOC (`dev` when running from source), so bug reports carry the real build.
+  - **Profession list follows the client** — Jewelcrafting and Inscription are hidden whenever the client's own profession skill lines don't include them, even if it reports a later expansion level. The expansion-level check still applies when that list isn't available.
+
+  ### Fixes
+
+  - **Profession drop/relearn sync** — drop history survives relearning and accompanies recipe deltas, so guildmates who missed the removal discard old recipes before accepting the new scan. `/gc drop` checks current professions rather than the login cache. Distinct removals sharing a timestamp both apply, and equal-version sync reconciles drop history. Protocol and data-format versions are now 3.
+  - **No chat taint from ChatThrottleLib on Forever** — the bundled ChatThrottleLib is now v32 (Ace3 r1403), which skips its byte count for secret chat values instead of calling `strlen` on them. The unused standalone v29 copy is removed.
+  - **Forever members keyed by GUID** — Forever characters have a first name and a surname and no realm, so the old `Name-Realm` key never matched the guild roster. Every member would have been marked absent and tombstoned after 7 days. On Forever, GuildCrafts now keys members by GUID and reads names from the roster for display and whispers. Pre-GUID entries for your own character move to the new key automatically.
+  - **No more profession purges from a bad read** — a profession that holds recipes is no longer deleted, or announced as dropped to the guild, just because the client's profession read came back empty or short. Forever has no skill-line fallback, so one empty read used to purge every profession for every guildmate. GuildCrafts now keeps the data, retries the read, and prints a hint; `/gc drop <profession>` is the only way to remove one. Peers ignore removals that don't come from `/gc drop` or predate that profession's stored update. Sync keeps recipes from empty reads unless it carries a later explicit drop.
+
   ## 2.0.2 — 2026-09-08
 
   ### Fixes

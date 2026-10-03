@@ -54,6 +54,17 @@ local function GetSpellName(spellID)
     return GetSpellInfo(spellID)
 end
 
+-- Mainline-API clients (Forever) removed the GetItemInfo global; C_Item returns the same values.
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+
+-- IsSpellKnown moved to C_SpellBook on Mainline-API clients.
+local function IsSpellKnownCompat(spellID)
+    if IsSpellKnown then return IsSpellKnown(spellID) end
+    if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(spellID) end
+    if IsPlayerSpell then return IsPlayerSpell(spellID) end
+    return false
+end
+
 -- C_SkillLine (WotLK+) replaces GetNumSkillLines/GetSkillLineInfo.
 local function IterSkillLines()
     if C_SkillLine and C_SkillLine.GetSkillLines then
@@ -295,6 +306,7 @@ function Data:OnInitialize()
 end
 
 function Data:OnEnable()
+    self:ApplyClientProfessionGate()
 end
 
 ----------------------------------------------------------------------
@@ -396,9 +408,9 @@ function Data:RebuildOnlineCache()
 
     local numMembers = GetNumGuildMembers()
     for i = 1, numMembers do
-        local name, _, _, _, _, _, _, _, isOnline = GetGuildRosterInfo(i)
+        local name, _, _, _, _, _, _, _, isOnline, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
         if name then
-            local memberKey = self:NormalizeMemberKey(name)
+            local memberKey = self:RosterMemberKey(name, guid)
             if memberKey then
                 self._onlineCache[memberKey] = isOnline or false
             end
@@ -406,7 +418,8 @@ function Data:RebuildOnlineCache()
     end
 
     -- Always mark self as online (roster may not include us on early fires)
-    self._onlineCache[self:GetPlayerKey()] = true
+    local playerKey = self:GetPlayerKey()
+    if playerKey then self._onlineCache[playerKey] = true end
 end
 
 function Data:IsMemberOnline(memberKey)
@@ -445,6 +458,21 @@ function Data:NormalizeMemberKey(key)
     end
     if not name or name == "" then return nil end
     return name .. "-" .. NormalizeRealmName(realm)
+end
+
+--- Member key for a guild roster row. guid is GetGuildRosterInfo's 17th return.
+function Data:RosterMemberKey(name, _guid)
+    return self:NormalizeMemberKey(name)
+end
+
+--- Display name for a member key.
+function Data:GetMemberName(key)
+    return key:match("^(.+)-") or key
+end
+
+--- Character name to address an addon or chat whisper to, or nil if unknown.
+function Data:GetWhisperTarget(key)
+    return key:match("^(.+)-") or key
 end
 
 ----------------------------------------------------------------------
@@ -624,6 +652,11 @@ function Data:GetMemberEntry(memberKey, create)
         }
         gdb[memberKey] = entry
     end
+    if entry and not entry._tombstone then
+        for _, profData in pairs(entry.professions or {}) do
+            if not profData.lastUpdate then profData.lastUpdate = entry.lastUpdate end
+        end
+    end
     return entry
 end
 
@@ -631,16 +664,26 @@ end
 -- Profession Detection (login-time, no window needed)
 ----------------------------------------------------------------------
 
-function Data:DetectProfessions()
-    local playerKey = self:GetPlayerKey()
-    local entry = self:GetMemberEntry(playerKey, true)
-    if not entry then return end
+local function DropRevision(entry, profName)
+    return (entry.dropped and entry.dropped[profName]) or 0
+end
 
-    -- Always clear absent marker on self — we are definitively online
-    if entry._absentSince then entry._absentSince = nil end
+-- Keep mutations ordered even when the wall clock has not advanced.
+local function AdvanceRevision(entry, profName)
+    entry.lastUpdate = math.max(time(), (entry.lastUpdate or 0) + 1)
+    if profName and entry.professions[profName] then
+        entry.professions[profName].lastUpdate = entry.lastUpdate
+    end
+    return entry.lastUpdate
+end
 
+--- Read current professions without changing stored recipes or drop history.
+function Data:ReadCurrentProfessions()
     local currentProfs = {}
     local skillLevels = {}  -- profName -> { rank, max }
+    local complete = GetProfessions ~= nil
+        or (C_SkillLine and C_SkillLine.GetSkillLines) ~= nil
+        or (GetNumSkillLines ~= nil and GetSkillLineInfo ~= nil)
 
     if GetProfessions then
         -- MoP+ path: GetProfessions() returns indices for the player's professions
@@ -653,13 +696,18 @@ function Data:DetectProfessions()
         if #profIndices > 0 then
             for _, idx in ipairs(profIndices) do
                 if idx then
-                    local name, _, skillRank, skillMaxRank = GetProfessionInfo(idx)
+                    local name, _, skillRank, skillMaxRank
+                    if GetProfessionInfo then
+                        name, _, skillRank, skillMaxRank = GetProfessionInfo(idx)
+                    end
                     if name then
                         local canonical = self:GetCanonicalProfName(name)
                         if TRACKED_PROFESSIONS[canonical] then
                             currentProfs[canonical] = true
                             skillLevels[canonical] = { rank = skillRank, max = skillMaxRank }
                         end
+                    else
+                        complete = false
                     end
                 end
             end
@@ -688,48 +736,83 @@ function Data:DetectProfessions()
         end
     end
 
-    -- Detect dropped professions — collect names before nil'ing
+    return currentProfs, skillLevels, complete
+end
+
+function Data:DetectProfessions()
+    local playerKey = self:GetPlayerKey()
+    local entry = self:GetMemberEntry(playerKey, true)
+    if not entry then return end
+
+    -- Always clear absent marker on self — we are definitively online
+    if entry._absentSince then entry._absentSince = nil end
+
+    local currentProfs, skillLevels = self:ReadCurrentProfessions()
+
+    -- Professions missing from this read. A read can come back empty (Forever has no
+    -- skill-line fallback), so a profession holding recipes is never removed here:
+    -- only /gc drop removes one. Recipe-less entries drop silently and aren't broadcast.
+    local readEmpty = next(currentProfs) == nil
     local profChanged = false
-    local droppedProfs = {}
-    for profName, _ in pairs(entry.professions) do
+    local emptyDrops, missing = {}, {}
+    for profName, profData in pairs(entry.professions) do
         if TRACKED_PROFESSIONS[profName] and not currentProfs[profName] then
-            droppedProfs[#droppedProfs + 1] = profName
+            if not readEmpty and not next(profData.recipes or {}) then
+                emptyDrops[#emptyDrops + 1] = profName
+            else
+                missing[#missing + 1] = profName
+            end
         end
     end
-    for _, profName in ipairs(droppedProfs) do
-        GuildCrafts:Printf("Profession dropped: %s — purging recipes.", profName)
+    for _, profName in ipairs(emptyDrops) do
         entry.professions[profName] = nil
         profChanged = true
     end
 
+    if readEmpty and #missing > 0 then
+        self._detectRetries = (self._detectRetries or 0) + 1
+        if self._detectRetries <= 2 then
+            GuildCrafts:Debug("DetectProfessions: empty read, keeping stored professions; retrying in 10s")
+            self:ScheduleTimer("DetectProfessions", 10)
+        end
+    elseif #missing > 0 then
+        self._detectRetries = 0
+        self._dropHinted = self._dropHinted or {}
+        table.sort(missing)
+        for _, profName in ipairs(missing) do
+            if not self._dropHinted[profName] then
+                self._dropHinted[profName] = true
+                GuildCrafts:Printf("%s wasn't detected on this character. If you dropped it, type /gc drop %s to remove its recipes for the guild.",
+                    profName, profName:lower())
+            end
+        end
+    else
+        self._detectRetries = 0
+    end
+
     -- Ensure entries exist for current professions and update skill levels
     local dataChanged = false
+    local revision = math.max(time(), (entry.lastUpdate or 0) + 1)
     for profName, _ in pairs(currentProfs) do
         if not entry.professions[profName] then
-            entry.professions[profName] = { recipes = {} }
+            entry.professions[profName] = { recipes = {}, lastUpdate = revision }
+            dataChanged = true
         end
+        -- Retain drop history so offline peers can discard pre-drop recipes.
         local sl = skillLevels[profName]
         if sl then
             local profData = entry.professions[profName]
             if profData.skillLevel ~= sl.rank or profData.maxSkillLevel ~= sl.max then
                 profData.skillLevel = sl.rank
                 profData.maxSkillLevel = sl.max
+                profData.lastUpdate = revision
                 dataChanged = true
             end
         end
     end
 
     if profChanged or dataChanged then
-        entry.lastUpdate = time()
-    end
-
-    -- Broadcast each dropped profession individually so receivers know which one
-    if profChanged then
-        if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastProfessionRemoval then
-            for _, profName in ipairs(droppedProfs) do
-                GuildCrafts.Comms:BroadcastProfessionRemoval(playerKey, profName)
-            end
-        end
+        entry.lastUpdate = revision
     end
 
     self._currentProfs = currentProfs
@@ -737,6 +820,54 @@ function Data:DetectProfessions()
 
     -- Detect specialisations immediately after professions
     self:DetectSpecialisations()
+end
+
+--- Remove one of the player's own stored professions and tell the guild.
+--- The only path that deletes a profession holding recipes (/gc drop <profession>).
+function Data:DropProfession(input)
+    if not input or input == "" then
+        GuildCrafts:Print("Usage: /gc drop <profession>")
+        return
+    end
+    local playerKey = self:GetPlayerKey()
+    local entry = self:GetMemberEntry(playerKey, false)
+    local wanted = input:lower()
+    local profName
+    for name in pairs(entry and entry.professions or {}) do
+        if name:lower() == wanted or self:GetCanonicalProfName(input) == name then
+            profName = name
+        end
+    end
+    if not profName then
+        GuildCrafts:Printf("No stored profession called %s.", input)
+        return
+    end
+    local ok, currentProfs, _, complete = pcall(self.ReadCurrentProfessions, self)
+    if not ok or not complete then
+        GuildCrafts:Print("Could not read current professions. Try /gc drop again when they are available.")
+        return
+    end
+    self._currentProfs = currentProfs
+    if currentProfs[profName] then
+        GuildCrafts:Printf("%s is still known on this character. Unlearn it first.", profName)
+        return
+    end
+
+    local now = AdvanceRevision(entry)
+    entry.professions[profName] = nil
+    entry.dropped = entry.dropped or {}
+    entry.dropped[profName] = now
+    entry.lastUpdate = now
+    if GuildCrafts.Tooltip then
+        GuildCrafts.Tooltip:InvalidateIndex()
+    end
+    if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastProfessionRemoval then
+        GuildCrafts.Comms:BroadcastProfessionRemoval(playerKey, profName)
+    end
+    GuildCrafts:Printf("Removed %s and its recipes.", profName)
+    if GuildCrafts.UI and GuildCrafts.UI.Refresh then
+        GuildCrafts.UI:Refresh()
+    end
 end
 
 ----------------------------------------------------------------------
@@ -754,7 +885,7 @@ function Data:DetectSpecialisations()
     local changed = false
     for spellID, info in pairs(SPECIALISATION_SPELLS) do
         local profData = entry.professions[info.prof]
-        if profData and IsSpellKnown(spellID) then
+        if profData and IsSpellKnownCompat(spellID) then
             detectedSpecs[info.prof] = info.spec
             if profData.specialisation ~= info.spec then
                 profData.specialisation = info.spec
@@ -774,7 +905,7 @@ function Data:DetectSpecialisations()
     end
 
     if changed then
-        entry.lastUpdate = time()
+        AdvanceRevision(entry)
     end
 end
 
@@ -895,7 +1026,7 @@ function Data:ScanTradeSkillCooldowns(profName, numSkills)
 
     if changed then
         profData.cooldowns = hasCD and cooldowns or nil
-        entry.lastUpdate = now
+        AdvanceRevision(entry, profName)
         GuildCrafts:Debug("Cooldowns changed for", profName, ":", hasCD and "active" or "cleared")
     else
         -- Update endTimes locally without triggering a sync
@@ -948,7 +1079,7 @@ function Data:ScanCraftCooldowns(profName, numCrafts)
 
     if changed then
         profData.cooldowns = hasCD and cooldowns or nil
-        entry.lastUpdate = now
+        AdvanceRevision(entry, profName)
         GuildCrafts:Debug("Cooldowns changed for", profName, ":", hasCD and "active" or "cleared")
     else
         if hasCD then profData.cooldowns = cooldowns end
@@ -1039,6 +1170,7 @@ function Data:ScanTradeSkill()
     local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
+        AdvanceRevision(entry, profName)
     end
 
     -- Refresh skill level while the profession window is open
@@ -1049,7 +1181,7 @@ function Data:ScanTradeSkill()
             if profDataLocal.skillLevel ~= currentLevel or profDataLocal.maxSkillLevel ~= maxLevel then
                 profDataLocal.skillLevel = currentLevel
                 profDataLocal.maxSkillLevel = maxLevel
-                entry.lastUpdate = time()
+                AdvanceRevision(entry, profName)
             end
         end
     end
@@ -1120,13 +1252,13 @@ function Data:ScanTradeSkill()
     end
 
     if backfillChanged and newCount == 0 then
-        entry.lastUpdate = time()
+        AdvanceRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: backfilled reagent/category data.", profName)
     end
 
     local changed = newCount > 0
     if newCount > 0 then
-        entry.lastUpdate = time()
+        AdvanceRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: %d new recipe(s) found.", profName, newCount)
 
         -- Only broadcast the newly discovered recipes, not the entire set
@@ -1147,7 +1279,8 @@ function Data:ScanTradeSkill()
         -- Always refresh lastUpdate when a profession window is opened, even if
         -- nothing changed. Without this, users who have learned all recipes will
         -- never advance their timestamp and will hit the stale-data warning.
-        entry.lastUpdate = time()
+        entry.lastUpdate = math.max(time(), entry.lastUpdate or 0)
+        entry.professions[profName].lastUpdate = entry.lastUpdate
         -- Only broadcast the timestamp bump when data is approaching the prune
         -- threshold (25–45 days). Avoids spamming the DR on every profession open.
         -- Use ageAtScanStart (captured before backfill) so backfill cannot reset the age.
@@ -1244,6 +1377,7 @@ function Data:ScanCraft()
     local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
+        AdvanceRevision(entry, profName)
     end
 
     -- Refresh Enchanting skill level while the window is open
@@ -1253,7 +1387,7 @@ function Data:ScanCraft()
             if profDataLocal.skillLevel ~= skillRank or profDataLocal.maxSkillLevel ~= skillMaxRank then
                 profDataLocal.skillLevel = skillRank
                 profDataLocal.maxSkillLevel = skillMaxRank
-                entry.lastUpdate = time()
+                AdvanceRevision(entry, profName)
             end
             break
         end
@@ -1324,13 +1458,13 @@ function Data:ScanCraft()
     end
 
     if backfillChanged and newCount == 0 then
-        entry.lastUpdate = time()
+        AdvanceRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: backfilled reagent/category data.", profName)
     end
 
     local changed = newCount > 0
     if newCount > 0 then
-        entry.lastUpdate = time()
+        AdvanceRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: %d new recipe(s) found.", profName, newCount)
 
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastNewRecipes then
@@ -1350,7 +1484,8 @@ function Data:ScanCraft()
         -- Always refresh lastUpdate when a profession window is opened, even if
         -- nothing changed. Without this, users who have learned all recipes will
         -- never advance their timestamp and will hit the stale-data warning.
-        entry.lastUpdate = time()
+        entry.lastUpdate = math.max(time(), entry.lastUpdate or 0)
+        entry.professions[profName].lastUpdate = entry.lastUpdate
         -- Only broadcast the timestamp bump when data is approaching the prune
         -- threshold (25–45 days). Avoids spamming the DR on every profession open.
         -- Use ageAtScanStart (captured before backfill) so backfill cannot reset the age.
@@ -1411,6 +1546,51 @@ end
 -- Modern Scan (MoP+ uses C_TradeSkillUI namespace)
 ----------------------------------------------------------------------
 
+-- Mainline-API clients (Forever) dropped GetRecipeItemLink and the per-index
+-- reagent getters in favour of GetRecipeSchematic.
+local function GetRecipeSchematic(recipeID)
+    if C_TradeSkillUI.GetRecipeSchematic then
+        return C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
+    end
+end
+
+local function GetRecipeOutputItemID(recipeID, schematic)
+    if C_TradeSkillUI.GetRecipeItemLink then
+        local itemLink = C_TradeSkillUI.GetRecipeItemLink(recipeID)
+        return itemLink and tonumber(itemLink:match("item:(%d+)"))
+    end
+    return schematic and schematic.outputItemID
+end
+
+local function GetRecipeReagentList(recipeID, schematic)
+    local reagents = {}
+    if C_TradeSkillUI.GetRecipeNumReagents then
+        local numReagents = C_TradeSkillUI.GetRecipeNumReagents(recipeID) or 0
+        for j = 1, numReagents do
+            local reagentName, _, reagentCount = C_TradeSkillUI.GetRecipeReagentInfo(recipeID, j)
+            if reagentName then
+                local itemID_r
+                local rLink = C_TradeSkillUI.GetRecipeReagentItemLink(recipeID, j)
+                if rLink then itemID_r = tonumber(rLink:match("item:(%d+)")) end
+                reagents[#reagents + 1] = { name = reagentName, count = reagentCount or 1, itemID = itemID_r }
+            end
+        end
+    elseif schematic and schematic.reagentSlotSchematics then
+        local basic = Enum.CraftingReagentType and Enum.CraftingReagentType.Basic
+        for _, slot in ipairs(schematic.reagentSlotSchematics) do
+            local reagent = slot.reagents and slot.reagents[1]
+            if reagent and reagent.itemID and (not basic or slot.reagentType == basic) then
+                reagents[#reagents + 1] = {
+                    name = GetItemInfo(reagent.itemID) or "",
+                    count = slot.quantityRequired or 1,
+                    itemID = reagent.itemID,
+                }
+            end
+        end
+    end
+    return reagents
+end
+
 function Data:ScanTradeSkillModern()
     if not C_TradeSkillUI then
         GuildCrafts:Debug("ScanTradeSkillModern: C_TradeSkillUI is nil")
@@ -1450,6 +1630,7 @@ function Data:ScanTradeSkillModern()
     local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
+        AdvanceRevision(entry, profName)
     end
 
     -- Refresh skill level
@@ -1458,7 +1639,7 @@ function Data:ScanTradeSkillModern()
         if profDataLocal.skillLevel ~= profInfo.skillLevel or profDataLocal.maxSkillLevel ~= profInfo.maxSkillLevel then
             profDataLocal.skillLevel = profInfo.skillLevel
             profDataLocal.maxSkillLevel = profInfo.maxSkillLevel
-            entry.lastUpdate = time()
+            AdvanceRevision(entry, profName)
         end
     end
 
@@ -1489,36 +1670,16 @@ function Data:ScanTradeSkillModern()
     for _, recipeID in ipairs(recipeIDs) do
         local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
         if info and info.learned then
-            local key
-            local itemLink = C_TradeSkillUI.GetRecipeItemLink(recipeID)
-            if itemLink then
-                local itemID = tonumber(itemLink:match("item:(%d+)"))
-                key = itemID or -recipeID
-            else
-                key = -recipeID
-            end
+            local schematic = GetRecipeSchematic(recipeID)
+            local key = GetRecipeOutputItemID(recipeID, schematic) or -recipeID
 
             if key then
                 -- Scan reagents into shared RecipeDB
-                if C_TradeSkillUI.GetRecipeNumReagents then
-                    local numReagents = C_TradeSkillUI.GetRecipeNumReagents(recipeID)
-                    if numReagents and numReagents > 0 then
-                        local existingReagents = self:GetRecipeReagents(key)
-                        if not existingReagents or #existingReagents < numReagents then
-                            local reagents = {}
-                            for j = 1, numReagents do
-                                local reagentName, _, reagentCount = C_TradeSkillUI.GetRecipeReagentInfo(recipeID, j)
-                                if reagentName then
-                                    local itemID_r
-                                    local rLink = C_TradeSkillUI.GetRecipeReagentItemLink(recipeID, j)
-                                    if rLink then itemID_r = tonumber(rLink:match("item:(%d+)")) end
-                                    reagents[#reagents + 1] = { name = reagentName, count = reagentCount or 1, itemID = itemID_r }
-                                end
-                            end
-                            if #reagents > 0 then
-                                self:SetRecipeInfo(key, info.name, info.categoryName, reagents)
-                            end
-                        end
+                local reagents = GetRecipeReagentList(recipeID, schematic)
+                if #reagents > 0 then
+                    local existingReagents = self:GetRecipeReagents(key)
+                    if not existingReagents or #existingReagents < #reagents then
+                        self:SetRecipeInfo(key, info.name, info.categoryName, reagents)
                     end
                 end
 
@@ -1537,7 +1698,7 @@ function Data:ScanTradeSkillModern()
 
     local changed = newCount > 0
     if newCount > 0 then
-        entry.lastUpdate = time()
+        AdvanceRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: %d new recipe(s) found.", profName, newCount)
 
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastNewRecipes then
@@ -1551,7 +1712,8 @@ function Data:ScanTradeSkillModern()
             GuildCrafts.Tooltip:InvalidateIndex()
         end
     else
-        entry.lastUpdate = time()
+        entry.lastUpdate = math.max(time(), entry.lastUpdate or 0)
+        entry.professions[profName].lastUpdate = entry.lastUpdate
         if ageAtScanStart >= TOUCH_BROADCAST_THRESHOLD and GuildCrafts.Comms and GuildCrafts.Comms.BroadcastTimestampTouch then
             GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName)
         end
@@ -1581,6 +1743,7 @@ function Data:StripSyncFields(entry)
         lastUpdate = entry.lastUpdate,
         dataFormat = GuildCrafts.DATA_FORMAT_VERSION,
         professions = {},
+        dropped    = entry.dropped,  -- retained /gc drop revisions, including after relearning
     }
 
     for profName, profData in pairs(entry.professions or {}) do
@@ -1589,6 +1752,7 @@ function Data:StripSyncFields(entry)
             skillLevel = profData.skillLevel,
             maxSkillLevel = profData.maxSkillLevel,
             specialisation = profData.specialisation,
+            lastUpdate = profData.lastUpdate or entry.lastUpdate,
             -- cooldowns intentionally omitted
         }
         for recipeKey, recipeData in pairs(profData.recipes or {}) do
@@ -1719,6 +1883,19 @@ function Data:MergeIncoming(incomingData)
                     or incomingEntry.lastUpdate > localEntry.lastUpdate
                     or (incomingEntry.lastUpdate == localEntry.lastUpdate
                         and (incomingEntry.dataFormat or 0) > (localEntry.dataFormat or 0))
+                -- Equal member timestamps can still carry distinct profession drops.
+                if localEntry and incomingEntry.lastUpdate == localEntry.lastUpdate then
+                    for profName, revision in pairs(incomingEntry.dropped or {}) do
+                        if revision > DropRevision(localEntry, profName) then
+                            localEntry.dropped = localEntry.dropped or {}
+                            localEntry.dropped[profName] = revision
+                            localEntry.professions[profName] = incomingEntry.professions
+                                and incomingEntry.professions[profName] or nil
+                            self:ExtractToRecipeDB(localEntry)
+                            changed = true
+                        end
+                    end
+                end
                 if dominated then
                     -- Partial-scan protection: if the incoming entry has a profession
                     -- with suspiciously few recipes compared to what we already store
@@ -1733,7 +1910,8 @@ function Data:MergeIncoming(incomingData)
                             if localProf then
                                 for _ in pairs(localProf.recipes or {}) do existingCount = existingCount + 1 end
                             end
-                            if incomingCount > 0 and existingCount > 0
+                            if DropRevision(incomingEntry, profName) == DropRevision(localEntry, profName)
+                                    and incomingCount > 0 and existingCount > 0
                                     and incomingCount < (existingCount * 0.5) then
                                 GuildCrafts:Debug("MergeIncoming: partial-scan guard blocked",
                                     memberKey, profName,
@@ -1744,6 +1922,9 @@ function Data:MergeIncoming(incomingData)
                         end
                     end
                     if not suspicious then
+                        if localEntry then
+                            self:CarryOverProfessions(memberKey, localEntry, incomingEntry)
+                        end
                         gdb[memberKey] = incomingEntry
                         self:ExtractToRecipeDB(incomingEntry)
                         changed = true
@@ -1760,8 +1941,35 @@ function Data:MergeIncoming(incomingData)
     return changed
 end
 
+--- Preserve recipes only within the same drop/relearn generation.
+function Data:CarryOverProfessions(memberKey, localEntry, incomingEntry)
+    incomingEntry.professions = incomingEntry.professions or {}
+    for profName, localProf in pairs(localEntry.professions or {}) do
+        local localDrop = DropRevision(localEntry, profName)
+        local incomingDrop = DropRevision(incomingEntry, profName)
+        if localDrop > incomingDrop then
+            incomingEntry.professions[profName] = localProf
+        elseif localDrop == incomingDrop and next(localProf.recipes or {}) then
+            local incomingProf = incomingEntry.professions[profName]
+            if not incomingProf or not next(incomingProf.recipes or {}) then
+                incomingEntry.professions[profName] = localProf
+                GuildCrafts:Debug("MergeIncoming: kept", profName, "for", memberKey,
+                    "(incoming had no recipes in the same generation)")
+            end
+        end
+    end
+    -- A newer member snapshot must not erase deletion history it hasn't seen.
+    for profName, revision in pairs(localEntry.dropped or {}) do
+        if revision > DropRevision(incomingEntry, profName) then
+            incomingEntry.professions[profName] = localEntry.professions[profName]
+            incomingEntry.dropped = incomingEntry.dropped or {}
+            incomingEntry.dropped[profName] = revision
+        end
+    end
+end
+
 --- Merge a single delta (one recipe added to a member's profession).
-function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpdate)
+function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpdate, dropRevision)
     local gdb = self:GetGuildDB()
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
@@ -1782,10 +1990,26 @@ function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpda
 
     local entry = self:GetMemberEntry(memberKey, true)
     if not entry then return end
+    local localDrop = DropRevision(entry, profName)
+    local latestDrop = math.max(localDrop, dropRevision or 0)
+    if (dropRevision and dropRevision < localDrop)
+            or (latestDrop > 0 and (not newLastUpdate or newLastUpdate <= latestDrop)) then
+        GuildCrafts:Debug("MergeDelta: drop history blocked stale recipe for", memberKey, profName)
+        return
+    end
+    if dropRevision and dropRevision > localDrop then
+        entry.professions[profName] = nil
+        entry.dropped = entry.dropped or {}
+        entry.dropped[profName] = dropRevision
+    end
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
     end
-    entry.professions[profName].recipes[recipeKey] = recipeData
+    local profData = entry.professions[profName]
+    profData.recipes[recipeKey] = recipeData
+    if newLastUpdate then
+        profData.lastUpdate = math.max(newLastUpdate, profData.lastUpdate or 0)
+    end
     -- Extract reagents/category to shared RecipeDB
     if recipeData.reagents or recipeData.category then
         self:SetRecipeInfo(recipeKey, recipeData.name, recipeData.category, recipeData.reagents)
@@ -1807,22 +2031,30 @@ function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate)
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
     if not memberKey then return end
-    local entry = gdb[memberKey]
+    local entry = self:GetMemberEntry(memberKey, false)
     -- Tombstone entries have no professions; removal is a no-op for them.
     if entry and entry._tombstone then
         GuildCrafts:Debug("MergeProfessionRemoval: tombstone present for", memberKey, "— skipping")
         return
     end
-    if entry and entry.professions[profName] then
-        entry.professions[profName] = nil
-        if newLastUpdate and newLastUpdate > (entry.lastUpdate or 0) then
-            entry.lastUpdate = newLastUpdate
-        end
-        if GuildCrafts.Tooltip then
-            GuildCrafts.Tooltip:InvalidateIndex()
-        end
-        GuildCrafts:Debug("Profession removed:", memberKey, profName)
+    local profData = entry and entry.professions[profName]
+    local professionUpdate = profData and profData.lastUpdate or 0
+    -- Other professions may have changed in the same second or since this drop.
+    if not newLastUpdate or newLastUpdate < professionUpdate
+            or (entry and newLastUpdate <= DropRevision(entry, profName)) then
+        GuildCrafts:Debug("MergeProfessionRemoval: ignored stale removal for", memberKey, profName)
+        return
     end
+    entry = entry or self:GetMemberEntry(memberKey, true)
+    if not entry then return end
+    entry.professions[profName] = nil
+    entry.dropped = entry.dropped or {}
+    entry.dropped[profName] = newLastUpdate
+    entry.lastUpdate = math.max(entry.lastUpdate or 0, newLastUpdate)
+    if GuildCrafts.Tooltip then
+        GuildCrafts.Tooltip:InvalidateIndex()
+    end
+    GuildCrafts:Debug("Profession removed:", memberKey, profName)
 end
 
 ----------------------------------------------------------------------
@@ -1845,9 +2077,9 @@ function Data:PruneRoster()
     end
 
     for i = 1, numMembers do
-        local name, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = GetGuildRosterInfo(i)
+        local name, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, guid = GetGuildRosterInfo(i)
         if name then
-            local memberKey = self:NormalizeMemberKey(name)
+            local memberKey = self:RosterMemberKey(name, guid)
             if memberKey then
                 rosterKeys[memberKey] = true
             end
@@ -2040,6 +2272,50 @@ local PROF_NAMES = {}
 for _, n in ipairs(PRIMARY_PROF_NAMES)   do PROF_NAMES[#PROF_NAMES + 1] = n end
 for _, n in ipairs(SECONDARY_PROF_NAMES) do PROF_NAMES[#PROF_NAMES + 1] = n end
 
+local function RemoveName(list, name)
+    for i = #list, 1, -1 do
+        if list[i] == name then table.remove(list, i) end
+    end
+end
+
+-- Professions the expansion-level check keeps that a client may still not have.
+local EXPANSION_GATED = { "Jewelcrafting", "Inscription" }
+
+--- Drop Jewelcrafting and Inscription when the client's own profession skill lines
+--- don't include them. Covers a Classic+ client that raises its expansion level
+--- without adding them. Only narrows, and does nothing when the list is unavailable
+--- or empty, so the expansion-level check above stays the fallback.
+function Data:ApplyClientProfessionGate()
+    local tradeSkill = C_TradeSkillUI
+    if not (tradeSkill and tradeSkill.GetAllProfessionTradeSkillLines
+            and tradeSkill.GetProfessionInfoBySkillLineID) then return end
+    local okLines, lines = pcall(tradeSkill.GetAllProfessionTradeSkillLines)
+    if not okLines or type(lines) ~= "table" or #lines == 0 then return end
+
+    local present = {}
+    for _, skillLineID in ipairs(lines) do
+        local okInfo, info = pcall(tradeSkill.GetProfessionInfoBySkillLineID, skillLineID)
+        if okInfo and type(info) == "table" then
+            for _, name in ipairs({ info.professionName, info.parentProfessionName }) do
+                if type(name) == "string" and not (issecretvalue and issecretvalue(name)) then
+                    present[self:GetCanonicalProfName(name)] = true
+                end
+            end
+        end
+    end
+    if next(present) == nil then return end
+
+    for _, profName in ipairs(EXPANSION_GATED) do
+        if TRACKED_PROFESSIONS[profName] and not present[profName] then
+            TRACKED_PROFESSIONS[profName] = nil
+            PROFESSION_SPELL_IDS[profName] = nil
+            RemoveName(PRIMARY_PROF_NAMES, profName)
+            RemoveName(PROF_NAMES, profName)
+            GuildCrafts:Debug("Profession gate: client has no", profName, "skill line — not tracked")
+        end
+    end
+end
+
 ----------------------------------------------------------------------
 -- Member Data Accessors (for UI)
 ----------------------------------------------------------------------
@@ -2081,7 +2357,7 @@ function Data:GetMembersByProfession()
         local seen    = {}   -- displayName -> index in deduped
         local deduped = {}
         for _, info in ipairs(list) do
-            local displayName = info.key:match("^(.+)-") or info.key
+            local displayName = Data:GetMemberName(info.key)
             local idx = seen[displayName]
             if not idx then
                 deduped[#deduped + 1] = info
@@ -2113,7 +2389,7 @@ function Data:GetProfessionMemberCount(profName, onlineOnly)
     for memberKey, entry in pairs(gdb) do
         if type(entry) == "table" and entry.professions and entry.professions[profName] then
             if not onlineOnly or self:IsMemberOnline(memberKey) then
-                local displayName = memberKey:match("^(.+)-") or memberKey
+                local displayName = Data:GetMemberName(memberKey)
                 if not seen[displayName] then
                     seen[displayName] = true
                     count = count + 1
@@ -2180,7 +2456,7 @@ function Data:GetAllRecipesForProfession(profName)
         local seenCrafters   = {}
         local uniqueCrafters = {}
         for _, c in ipairs(recipe.crafters) do
-            local displayName = c.key:match("^(.+)-") or c.key
+            local displayName = Data:GetMemberName(c.key)
             if not seenCrafters[displayName] then
                 seenCrafters[displayName] = true
                 uniqueCrafters[#uniqueCrafters + 1] = c
@@ -2250,7 +2526,7 @@ function Data:SearchRecipesByKey(key)
         local seenCrafters   = {}
         local uniqueCrafters = {}
         for _, c in ipairs(v.crafters) do
-            local displayName = c.key:match("^(.+)-") or c.key
+            local displayName = Data:GetMemberName(c.key)
             if not seenCrafters[displayName] then
                 seenCrafters[displayName] = true
                 uniqueCrafters[#uniqueCrafters + 1] = c
@@ -2334,7 +2610,7 @@ function Data:SearchRecipes(query, fuzzy)
         local seenCrafters   = {}
         local uniqueCrafters = {}
         for _, c in ipairs(v.crafters) do
-            local displayName = c.key:match("^(.+)-") or c.key
+            local displayName = Data:GetMemberName(c.key)
             if not seenCrafters[displayName] then
                 seenCrafters[displayName] = true
                 uniqueCrafters[#uniqueCrafters + 1] = c

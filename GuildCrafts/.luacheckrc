@@ -38,6 +38,10 @@ read_globals = {
     -- WoW API — Addon messaging
     "C_ChatInfo", "C_Timer", "C_GuildInfo",
 
+    -- WoW API — Addon metadata and restrictions (Mainline API clients)
+    "C_AddOns", "GetAddOnMetadata", "C_RestrictedActions", "Enum", "issecretvalue",
+    "UnitGUID", "UnitNameUnmodified", "UnitFullName", "GetTime", "C_TradeSkillUI",
+
     -- WoW API — Trade skills
     "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink",
     "GetTradeSkillRecipeLink", "GetTradeSkillLine", "ExpandTradeSkillSubClass",
