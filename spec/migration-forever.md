@@ -310,7 +310,18 @@ All on a Forever character, with the full TOC set installed:
    and a non-zero recipe count for that profession (scan verified 2026-10-02: Alchemy 5 of 197)
 8. In `/gc`, that profession → your name lists the same recipes (passed 2026-10-02)
 9. `/gc comms` first line reads `--- Comms Status (GuildCrafts dev) ---` from an unpackaged
-   copy, or the packaged version from a CurseForge build
+   copy, or the packaged version from a CurseForge build (passed 2026-10-03, `dev`)
+
+**Smoke test on merged `main` (`8f0dc69`), 2026-10-03, full TOC set, after a full relog:**
+- No Lua errors at login.
+- `/gc comms`: `Comms Status (GuildCrafts dev)`, `My role: DR`, `DR: Player-4619-012F81BC`,
+  `BDR: none`, `[1] Geo Prizm Player-4619-012F81BC (v3, …)`, `Total addon users: 1`.
+- `/gc dump`: `Local player: Player-4619-012F81BC`, guild key `Grim-Classic Beta PvP`, Cooking 12,
+  Herbalism 13, Alchemy 11, `Total: 1 members, 36 recipes`. Profession windows were opened
+  first, so the counts are fresh scans. No `Geo-Prizm` entry was left beside the GUID key.
+- `SP false false false false`.
+- Herbalism holds 13 recipes, so Forever gathering professions do have recipes. The Recipes
+  view still hides them for Herbalism and Skinning (`IsGatheringProfession`).
 
 ### Two-client checklist
 
@@ -435,7 +446,17 @@ Checked locally on 2026-10-02 against `a1c0554`:
 - The zip's TOC had `## Version: a1c0554` and `## X-Curse-Project-ID: 1469206`.
 - Without the strip, `-g forever` exited 1: `GuildCrafts.toc does not have an interface version
   that is compatible with the game version "forever"`.
-- Not yet run on GitHub's runners, and no real upload has been made.
+
+On GitHub on 2026-10-03, `workflow_dispatch` with `publish=false` (run `37093088953`, `main` at
+`8f0dc69`):
+- Strip, package and gate all passed, and publish was skipped. The gate printed
+  `forever-gate: OK (Game version: 1.60.1; GuildCrafts-8f0dc69-forever.zip; CTL v32)`.
+- The downloaded artifact held one TOC outside `Libs/`, `GuildCrafts/GuildCrafts_Camelot.toc`
+  (Interface 16001, `## Version: 8f0dc69`, project 1469206), and no `Data/`, docs, `CLAUDE.md`
+  or dotfiles. `README.md` opens with dkruenbo's credit, and `LICENSE` has both copyright lines.
+- The packager writes CRLF line endings. With `\r` stripped, the zipped ChatThrottleLib hashes
+  to the vetted v32 `3491b6c9…6dde8`.
+- No real CurseForge upload has been made yet.
 
 ### Draft-upload test plan
 
