@@ -300,11 +300,19 @@ Common fields:
 | `profession` | string | Canonical profession name (English). |
 | `lastUpdate` | integer | Unix timestamp of the scan. |
 
+From protocol version 3, local mutations use `max(time(), previous lastUpdate + 1)`.
+This keeps changes within one wall-clock second ordered. No-change scans refresh the
+timestamp without moving it backwards. Full entries retain `dropped[profession]`, the
+last explicit drop revision, even after relearning. Each profession also carries its
+own `lastUpdate`, so changes to another profession do not make a removal stale.
+Removals require `x = 1` and are checked against that profession's revision and drop history.
+
 Additional fields for `"add"`:
 
 | Field | Type | Description |
 |---|---|---|
 | `recipes` | table | `{ [recipeKey] = recipeData, ... }` Reagent data is stripped for size. |
+| `dropped` | integer | Last explicit drop revision for this profession, or 0. Version 3 senders include it so receivers can clear pre-drop recipes before adding new ones. |
 
 ### 4.8 DELTA\_AD
 
@@ -378,7 +386,12 @@ incoming vector:
   member key is added to SYNC\_PULL list.
 - **Equal timestamp but lower `dataFormat`**: member key is added to
   SYNC\_PULL list to trigger a schema-upgrade push.
-- **Equal and current**: entry is skipped.
+- **Equal with drop history**: exchange the entry in both directions to reconcile distinct
+  profession removals. Previously unseen drop markers are applied independently of the
+  member-level timestamp.
+- **Equal for the requester's own entry**: pull the owner's snapshot even when the DR has
+  not seen its drop history.
+- **Equal and current without those conditions**: entry is skipped.
 
 ### 5.3 DR Response Logic
 

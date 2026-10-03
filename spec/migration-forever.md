@@ -26,7 +26,8 @@ round-trip is proven on Forever.
 | Profession pruning (`GetClassicExpansionLevel`) | Gate added on client skill lines | Expansion level verified in game; gate inputs verified (`PSL`) |
 | Expansion filter / recipe tagging with no `Data_*.lua` | None needed | Verified in game: no buttons, no Lua errors |
 | SyncPausePolicy — Forever addon restrictions | Extend existing module | Implemented; API verified in game, encounter event not yet |
-| Version bump | None | `@project-version@`, packager-filled; `DISPLAY_VERSION` reads it |
+| Display version | None | `@project-version@`, packager-filled; `DISPLAY_VERSION` reads it |
+| Profession drop/relearn sync (PR #1 review) | Retain drop history; live drop validation; per-profession revisions | Implemented; 28 Lua 5.1 regression checks pass; in-game verification pending |
 
 ---
 
@@ -221,7 +222,7 @@ restriction, and a grace period after a restriction lifts.
 ## What does NOT need to change
 
 - **Other flavors' TOCs and `Data/Data_*.lua`** — untouched by design
-- **Comms protocol, `VERSION`, `DATA_FORMAT_VERSION`** — Forever guilds only sync with Forever clients
+- **Transport and election** — profession-reset fixes below extend the existing payloads; `VERSION` and `DATA_FORMAT_VERSION` are now 3
 - **Recipe key system** — positive itemID / negative spellID
 - **Profession pruning** — Task 2
 - **Expansion filter** — Task 3
@@ -267,11 +268,27 @@ after load, not whether the addon loads.
   empty, the fallback (`Data.lua:69-89`) reads zero lines. Every stored profession is then
   purged and its removal broadcast. legacynext saw professions read empty at `PLAYER_LOGOUT`
   (`CLAUDE.md:254-257`). **Fixed:** detection never removes a profession that holds recipes;
-  `/gc drop <profession>` is the only path, removals carry `x = 1` and must be newer, and
+  `/gc drop <profession>` is the only path, removals carry `x = 1` and must not predate
+  that profession's stored revision, and
   `MergeIncoming` keeps professions an incoming entry lost without a drop marker
   (`Data:CarryOverProfessions`).
   `PROF` on the same day: slot 1 Alchemy, slot 2 Herbalism, slot 5 Cooking, slots 3, 4, 6 and 7
   empty. That matches the positions GuildCrafts reads.
+  **PR #1 follow-up (implemented, 2026-10-02):** `dropped[profName]` retains the last explicit
+  drop revision after relearning. Full snapshots and recipe deltas carry that history.
+  A later drop starts a new recipe generation, so carry-over and the partial-scan guard
+  cannot preserve pre-drop recipes. Within the same generation those protections still
+  apply. `/gc drop` performs a live profession read and preserves recipes if the API errors
+  or returns an unnamed occupied slot. A successful empty read is accepted for this
+  explicit command, allowing removal after the last profession is unlearned.
+  Professions have their own `lastUpdate`; unrelated updates cannot block a removal.
+  Local mutations advance `lastUpdate` to `max(time(), previous + 1)`; no-change scans
+  cannot move it backwards. Equal-version sync exchanges entries with drop history and
+  pulls the requesting owner's entry, then reconciles previously unseen drop markers.
+  Protocol and data-format versions are 3.
+  **Local verification:** `tools/test-profession-sync.lua` passed all 28 checks on Lua
+  5.1.5; `luac -p` passed for Core, Data, Comms and the regression script. In-game results
+  for these fixes have not been supplied.
 - **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified.
 - **Favorites store booleans.** `Modules/Favorites.lua` writes `favoriteRecipes[key] = true`
   and `favoriteMembers[key] = true` to `GuildCraftsCharDB`. Under the 1/0 rule, those need a
@@ -324,7 +341,7 @@ Compare character by character after `Player-`. Call the lower key LOW and the o
 |---|---|---|---|
 | E1 | A only | Log in alone. Wait 30s. `/gc comms` | `My role: DR`, `DR: <A>`, `BDR: none`, `Total addon users: 1` |
 | E2 | A | `/gc debug` | `Debug mode: ON` |
-| E3 | B | Log in. Wait 30s | On A: `[debug] HELLO from <B> v2`, then `[debug] Sent HELLO reply to <B>` |
+| E3 | B | Log in. Wait 30s | On A: `[debug] HELLO from <B> v3`, then `[debug] Sent HELLO reply to <B>` |
 | E4 | both | `/gc comms` | Both print the same `DR: <LOW>` and `BDR: <HIGH>`. LOW shows `My role: DR`, HIGH `My role: BDR`. `Total addon users: 2`, both keys listed |
 | E5 | LOW | Wait for HIGH's sync (about 15s after E3) | With debug on, LOW prints `[debug] Handling SYNC_REQUEST from <HIGH> (role: DR )`, then either `Sync with <HIGH> — already converged.` or `Sending SYNC_PULL to <HIGH> …` |
 

@@ -670,8 +670,9 @@ function Comms:ProcessSyncRequest(requester, incomingVector)
     -- Check our entries vs incoming vector
     for memberKey, localTs in pairs(localVector) do
         local incomingTs = canonicalIncomingVector[memberKey]
-        if not incomingTs or localTs > incomingTs then
-            -- We have newer data → include in SYNC_RESPONSE (stripped)
+        if not incomingTs or localTs > incomingTs
+                or (localTs == incomingTs and db[memberKey].dropped) then
+            -- Equal timestamps still need drop-history reconciliation.
             toSend[memberKey] = GuildCrafts.Data:StripSyncFields(db[memberKey])
         end
     end
@@ -683,14 +684,14 @@ function Comms:ProcessSyncRequest(requester, incomingVector)
             -- Requester has newer data → request via SYNC_PULL
             toPull[#toPull + 1] = memberKey
         elseif localTs == incomingTs then
-            -- Timestamps match — check if our local copy is in an old data format.
+            -- Pull equal versions for schema upgrades, drop history, or the owner.
             -- Skip tombstones: they have no dataFormat and should never trigger a pull.
             local localEntry = db[memberKey]
             if localEntry and not localEntry._tombstone
-                    and (localEntry.dataFormat or 0) < GuildCrafts.DATA_FORMAT_VERSION then
+                    and ((localEntry.dataFormat or 0) < GuildCrafts.DATA_FORMAT_VERSION
+                        or localEntry.dropped or memberKey == requester) then
                 toPull[#toPull + 1] = memberKey
-                GuildCrafts:Debug("Format upgrade pull for", memberKey,
-                    "(local format", localEntry.dataFormat or 0, "< current", GuildCrafts.DATA_FORMAT_VERSION, ")")
+                GuildCrafts:Debug("Equal-version reconciliation pull for", memberKey)
             end
         end
     end
@@ -1073,6 +1074,7 @@ function Comms:BroadcastNewRecipes(memberKey, profName, recipes)
         profession = profName,
         recipes    = GuildCrafts.Data:StripRecipeReagents(recipes),
         lastUpdate = entry and entry.lastUpdate or time(),
+        dropped    = entry and entry.dropped and entry.dropped[profName] or 0,
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (add) for", memberKey, profName)
 end
@@ -1138,7 +1140,7 @@ function Comms:HandleDeltaUpdate(payload, sender)
         -- Merge each recipe
         for recipeKey, recipeData in pairs(payload.recipes) do
             GuildCrafts.Data:MergeDelta(memberKey, payload.profession,
-                recipeKey, recipeData, payload.lastUpdate)
+                recipeKey, recipeData, payload.lastUpdate, payload.dropped)
         end
         GuildCrafts:Debug("DELTA_UPDATE (add) from", sender, "for", memberKey)
 
@@ -1151,8 +1153,13 @@ function Comms:HandleDeltaUpdate(payload, sender)
         -- subsequent resurrection.
         local gdb = GuildCrafts.Data:GetGuildDB()
         local entry = gdb and gdb[memberKey]
-        if entry and not entry._tombstone and payload.lastUpdate > (entry.lastUpdate or 0) then
-            entry.lastUpdate = payload.lastUpdate
+        if entry and not entry._tombstone then
+            local profData = payload.profession and entry.professions[payload.profession]
+            if profData then
+                profData.lastUpdate = math.max(payload.lastUpdate,
+                    profData.lastUpdate or entry.lastUpdate or 0)
+            end
+            entry.lastUpdate = math.max(payload.lastUpdate, entry.lastUpdate or 0)
         end
         GuildCrafts:Debug("DELTA_UPDATE (touch) from", sender, "for", memberKey)
         -- No recipe data changed; skip UI refresh.
@@ -1167,19 +1174,12 @@ function Comms:HandleDeltaUpdate(payload, sender)
         end
         local gdb = GuildCrafts.Data:GetGuildDB()
         local entry = gdb and gdb[memberKey]
-        if entry then
-            -- We need the profession name... if not provided, do full replacement
-            -- using lastUpdate comparison
-            if payload.profession then
-                GuildCrafts.Data:MergeProfessionRemoval(memberKey,
-                    payload.profession, payload.lastUpdate)
-            else
-                -- Full member replacement via lastUpdate
-                if payload.lastUpdate and payload.lastUpdate > (entry.lastUpdate or 0) then
-                    -- Request the full member data in next sync
-                    GuildCrafts:Debug("DELTA_UPDATE removal without profession name — will resolve on next sync")
-                end
-            end
+        if payload.profession then
+            GuildCrafts.Data:MergeProfessionRemoval(memberKey,
+                payload.profession, payload.lastUpdate)
+        elseif entry and payload.lastUpdate and payload.lastUpdate > (entry.lastUpdate or 0) then
+            -- A removal without a profession name needs a full snapshot.
+            GuildCrafts:Debug("DELTA_UPDATE removal without profession name — will resolve on next sync")
         end
         GuildCrafts:Debug("DELTA_UPDATE (remove) from", sender, "for", memberKey)
     end

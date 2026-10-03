@@ -16,4 +16,5 @@ SavedVariables/
 *.zip
 
 # Generator tooling (data files + scripts, not part of the addon)
-tools/
+tools/*
+!tools/test-profession-sync.lua

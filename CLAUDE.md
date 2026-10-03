@@ -56,7 +56,7 @@ suffix and ignores `_Forever` (verified in game, 1.60.1, 2026-10-02).
 
 `GuildCrafts.VERSION` (integer) and `GuildCrafts.DATA_FORMAT_VERSION` (integer)
 are wire protocol versions — only increment when the sync protocol changes.
-Currently both are `2`.
+Currently both are `3` (profession drop/relearn history and per-profession revisions).
 
 ---
 
@@ -164,9 +164,11 @@ GuildCrafts/
 
 ---
 
-## No Automated Tests
+## Verification
 
-There is no test suite. Verification is manual in-game. Key things to check
+`lua5.1 tools/test-profession-sync.lua` runs the profession drop/relearn regression
+checks with stubbed WoW APIs. They don't exercise the game client or transport.
+Verification of gameplay remains manual in-game. Key things to check
 after any sync-layer change: `/gc comms` debug output, chunk delivery in a
 multi-user guild session, role election log.
 

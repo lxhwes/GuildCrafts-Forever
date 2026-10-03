@@ -30,12 +30,12 @@ GuildCrafts.DISPLAY_VERSION = ReadDisplayVersion()
 
 -- Protocol version — integer used in sync envelope for compatibility checks.
 -- Bump when the wire format changes in a backward-incompatible way.
-GuildCrafts.VERSION = 2
+GuildCrafts.VERSION = 3
 GuildCrafts.ADDON_PREFIX = "GuildCrafts"
 
 -- Data format version — bump when sync payload structure changes
 -- (e.g. adding reagents to sync). Forces re-pull of stale copies.
-GuildCrafts.DATA_FORMAT_VERSION = 2
+GuildCrafts.DATA_FORMAT_VERSION = 3
 
 -- Debug mode toggle
 GuildCrafts.debugMode = false
