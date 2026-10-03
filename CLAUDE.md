@@ -90,6 +90,10 @@ git tag vX.Y.Z && git push origin vX.Y.Z   # release workflow packages and uploa
 
 ## Architecture Quick Reference
 
+The upstream author's RFCs in `RFC/` are the full reference for architecture, sync protocol,
+DR/BDR election, data model, UI and release. Read the relevant one before changing sync or
+election code. The summary below is the short version.
+
 - **DR** (Designated Router): alphabetically first addon user; answers all
   `SYNC_REQUEST`s and broadcasts `HEARTBEAT` every 60s
 - **BDR** (Backup DR): second alphabetically; responds at retry=1
