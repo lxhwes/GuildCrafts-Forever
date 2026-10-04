@@ -18,6 +18,7 @@ lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
 lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
 lua5.1 tools/test-tooltip-index.lua     # tooltip index rebuild debounce (F9)
 bash tools/test-release-preflight.sh     # release.yml publish refusals (H18)
+lua5.1 tools/test-chat-links.lua        # chat links, [W] two-word whisper target (F25, F20)
 ```
 
 If `lua5.1` isn't on your PATH, Alex's PUC Lua 5.1.5 toolchain is at
@@ -178,8 +179,11 @@ line at X4 is the proof. If A is HIGH, B listing A's new recipe at X5 is the pro
 that recipe can only reach B by SYNC_PUSH.
 
 The `[W]` whisper button in the main window is a separate path, chat rather than the addon
-channel. Current behaviour with two-word names: `/w Geo Prizm …` targets `Geo` and puts `Prizm`
-in the message. That's open issue F20 (H14), a known gap.
+channel. It sets the crafter as the chat box's whisper target instead of typing `/w Geo Prizm …`,
+which chat can split into a whisper to `Geo` (F20). To check it, click `[W]` next to the other
+client's character. The chat box header should name the full `Geo Prizm`, not `Geo`, and the
+text should be `Can you craft <item> for me?`. Then shift-click a recipe name with the chat box
+open: its link should appear in the box (F25). Neither has been checked in game yet.
 
 ### X — Full snapshot exchange
 

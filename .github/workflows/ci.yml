@@ -69,3 +69,6 @@ jobs:
 
       - name: Release preflight
         run: bash tools/test-release-preflight.sh
+
+      - name: Chat links and whisper
+        run: lua5.1 tools/test-chat-links.lua

@@ -71,7 +71,7 @@ read_globals = {
     "InCombatLockdown", "UnitAffectingCombat", "IsInInstance",
 
     -- WoW API — Chat
-    "SendChatMessage", "ChatFrame_OpenChat", "ChatEdit_InsertLink",
+    "SendChatMessage", "ChatFrame_OpenChat", "ChatEdit_InsertLink", "ChatFrameUtil",
 
     -- WoW API — Sound
     "PlaySound", "SOUNDKIT",
