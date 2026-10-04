@@ -156,12 +156,13 @@ lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read
 lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster names
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
 lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
+lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
 ```
 
 Each exits non-zero on a failure. They stub WoW APIs and don't exercise the game client or
 transport. In-game procedures are in `docs/testing.md`.
 
-`.github/workflows/ci.yml` runs the lint and all four suites on every PR; `main` requires its
+`.github/workflows/ci.yml` runs the lint and every suite on every PR; `main` requires its
 `test` check. Declare any new WoW global in `GuildCrafts/.luacheckrc` `read_globals`.
 
 Modules capture WoW globals as locals at load (`local GetNumSkillLines = GetNumSkillLines`).

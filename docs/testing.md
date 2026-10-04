@@ -8,13 +8,14 @@ In-game probes are referred to by their tag (`TOC`, `RA`, `SP` and so on) and li
 
 ## Regression scripts
 
-Run all four from the repository root before every commit and every release:
+Run them all from the repository root before every commit and every release:
 
 ```bash
 lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read floor
 lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster names
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
 lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
+lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
 ```
 
 If `lua5.1` isn't on your PATH, Alex's PUC Lua 5.1.5 toolchain is at

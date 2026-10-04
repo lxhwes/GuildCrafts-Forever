@@ -9,6 +9,23 @@ local GuildCrafts = _G.GuildCrafts
 local Favorites = GuildCrafts:NewModule("Favorites")
 GuildCrafts.Favorites = Favorites
 
+-- Stored as 1: booleans may not round-trip through SavedVariables on Forever.
+-- Entries saved as true by earlier versions still count.
+local FAVORITE = 1
+
+local function IsSet(value)
+    return value == FAVORITE or value == true
+end
+
+-- Rewrite earlier true entries as 1 so they persist from now on.
+local function NormalizeValues(t)
+    local keys = {}
+    for key, value in pairs(t) do
+        if value == true then keys[#keys + 1] = key end
+    end
+    for _, key in ipairs(keys) do t[key] = FAVORITE end
+end
+
 ----------------------------------------------------------------------
 -- Lifecycle
 ----------------------------------------------------------------------
@@ -17,8 +34,10 @@ function Favorites:OnInitialize()
     -- GuildCraftsCharDB is created by WoW from SavedVariablesPerCharacter.
     -- We just ensure the sub-tables exist.
     GuildCraftsCharDB = GuildCraftsCharDB or {}
-    GuildCraftsCharDB.favoriteRecipes = GuildCraftsCharDB.favoriteRecipes or {} -- [recipeKey] = true
-    GuildCraftsCharDB.favoriteMembers = GuildCraftsCharDB.favoriteMembers or {} -- [memberKey] = true
+    GuildCraftsCharDB.favoriteRecipes = GuildCraftsCharDB.favoriteRecipes or {} -- [recipeKey] = 1
+    GuildCraftsCharDB.favoriteMembers = GuildCraftsCharDB.favoriteMembers or {} -- [memberKey] = 1
+    NormalizeValues(GuildCraftsCharDB.favoriteRecipes)
+    NormalizeValues(GuildCraftsCharDB.favoriteMembers)
 
     -- Collect keys first: assigning a new field during pairs() traversal is
     -- undefined behavior in Lua.
@@ -47,13 +66,13 @@ function Favorites:ToggleRecipe(recipeKey)
         db[recipeKey] = nil
         return false
     else
-        db[recipeKey] = true
+        db[recipeKey] = FAVORITE
         return true
     end
 end
 
 function Favorites:IsRecipeFavorite(recipeKey)
-    return GuildCraftsCharDB.favoriteRecipes[recipeKey] == true
+    return IsSet(GuildCraftsCharDB.favoriteRecipes[recipeKey])
 end
 
 ----------------------------------------------------------------------
@@ -69,7 +88,7 @@ function Favorites:ToggleMember(memberKey)
         db[memberKey] = nil
         return false
     else
-        db[memberKey] = true
+        db[memberKey] = FAVORITE
         return true
     end
 end
@@ -77,7 +96,7 @@ end
 function Favorites:IsMemberFavorite(memberKey)
     memberKey = GuildCrafts.Data:NormalizeMemberKey(memberKey)
     if not memberKey then return false end
-    return GuildCraftsCharDB.favoriteMembers[memberKey] == true
+    return IsSet(GuildCraftsCharDB.favoriteMembers[memberKey])
 end
 
 ----------------------------------------------------------------------
@@ -149,8 +168,8 @@ function Favorites:GetFavoriteMembersInfo()
     if not gdb then return {} end
 
     local result = {}
-    for memberKey in pairs(GuildCraftsCharDB.favoriteMembers) do
-        local entry = gdb[memberKey]
+    for memberKey, value in pairs(GuildCraftsCharDB.favoriteMembers) do
+        local entry = IsSet(value) and gdb[memberKey]
         if entry and type(entry) == "table" and entry.professions then
             local profNames = {}
             local totalRecipes = 0

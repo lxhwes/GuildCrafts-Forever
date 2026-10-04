@@ -49,3 +49,6 @@ jobs:
 
       - name: Report and debug log
         run: lua5.1 tools/test-report.lua
+
+      - name: Favorites SavedVariables
+        run: lua5.1 tools/test-favorites.lua
