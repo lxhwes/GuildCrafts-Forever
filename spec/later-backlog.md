@@ -3,12 +3,17 @@
 Written 2026-10-03 against `main` at `3c646a5`. These are feature ideas parked until after
 launch. Nothing here is committed work, and nothing here may start before the Oct 28 feature
 freeze has passed and the launch build is out. It defines plan IDs **N1–N9** (things that leave
-the game: export, companion, web, Discord) and **G1–G7** (in-game features). Neither prefix is
-used anywhere else in `spec/`.
+the game: export, companion, web, Discord) and **G1–G7** (in-game features). Neither prefix
+means anything else in `spec/`.
 
 ---
 
-## Instructions for Claude Code
+## Instructions for Claude Code (done)
+
+**Done 2026-10-03. Don't run these steps again.** Issues [#51]–[#66] exist on the Later
+milestone, the four labels were added, and the plan was updated in
+[PR #70](https://github.com/lxhwes/GuildCrafts-Forever/pull/70). The W prefix became N, because
+`docs/testing.md` already uses W1 and W2 as checklist steps. The steps below are kept as a record.
 
 Read `CLAUDE.md` first; its rules win over anything here. Then:
 

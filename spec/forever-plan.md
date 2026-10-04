@@ -27,10 +27,11 @@ guild. Nothing goes to guildmates until Phase 2's exit gate passes.
 ## Phase 0 — Tracking (done 2026-10-03)
 
 - Issues [#4]–[#39] created from this plan, titled with their plan IDs. [#44] (H19) and [#45]
-  (Q8) added from the CurseForge audit.
+  (Q8) added from the CurseForge audit. [#51]–[#66] (N1–N9, G1–G7) added from the Later
+  backlog.
 - Labels: `blocker`, `hardening`, `testing`, `needs-ingame`, `post-launch`, and the existing
-  `documentation`.
-- One milestone per phase, plus Post-launch.
+  `documentation`. The Later backlog added `feature`, `external`, `security` and `research`.
+- One milestone per phase, plus Post-launch and Later.
 - The `ROADMAP.md` rewrite moved to D1 cut 2 ([#22]). Until then it carries a history banner
   that points here.
 
