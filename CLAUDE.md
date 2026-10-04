@@ -120,7 +120,9 @@ election code. The summary below is the short version.
 
 ## Planned Work
 
-`spec/implementation-plan-v2.md` is the source of truth for all planned patches.
+`spec/forever-plan.md` is the source of truth for planned Forever work: phases to the
+Nov 4 launch, open questions, decisions, and the fork-review finding index (F#, C#).
+`spec/implementation-plan-v2.md` is upstream's patch history.
 
 Current status:
 - ✅ Patch 1 — SyncPausePolicy + Partial Scan Protection (v1.4.0)
@@ -166,8 +168,15 @@ GuildCrafts/
 
 ## Verification
 
-`lua5.1 tools/test-profession-sync.lua` runs the profession drop/relearn regression
-checks with stubbed WoW APIs. They don't exercise the game client or transport.
+Regression tests run from the repository root under PUC Lua 5.1, with stubbed WoW APIs:
+
+```bash
+lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read floor
+lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster names
+lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
+```
+
+Each exits non-zero on a failure. They don't exercise the game client or transport.
 Verification of gameplay remains manual in-game. Key things to check
 after any sync-layer change: `/gc comms` debug output, chunk delivery in a
 multi-user guild session, role election log.

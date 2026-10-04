@@ -51,3 +51,4 @@ Design documents and planning files. Not part of the addon — these are referen
 | `migration-wotlk.md` | WotLK Classic (3.4.x) compatibility notes |
 | `migration-mop.md` | MoP Classic (5.5.x) compatibility notes |
 | `migration-forever.md` | WoW Forever (1.60.x) compatibility notes |
+| `forever-plan.md` | Planned Forever work to launch: phases, open questions, decisions |

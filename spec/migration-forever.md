@@ -175,7 +175,7 @@ doesn't depend on booleans round-tripping.
 
 **None.** Every recipe is filed under "Vanilla" internally, but no button or label shows the
 tag, so users can't see it. Telling new Forever recipes apart is recipe-data work, which is
-out of scope (spec/fork-review.md C5).
+out of scope (C5 in `spec/forever-plan.md`).
 
 ---
 
@@ -215,7 +215,8 @@ On Classic clients `C_RestrictedActions` is nil, so those flavors are unaffected
 
 Not included, pending a decision: holding `HELLO`/`HEARTBEAT`/`GC_ACK` during a Chat
 restriction, keeping the DR watchdog fresh under Map or Chat, keeping `!gc` silent under a
-restriction, and a grace period after a restriction lifts.
+restriction, and a grace period after a restriction lifts. These wait on the `RE` result (H8 in
+`spec/forever-plan.md`).
 
 ---
 
@@ -231,7 +232,8 @@ restriction, and a grace period after a restriction lifts.
 
 ## Forever-specific edge cases (known, not in this guide's scope)
 
-These come from `spec/fork-review.md` and legacynext's in-game notes. They affect behaviour
+These come from the 2026-09-28 fork review and legacynext's in-game notes. Finding IDs (F#, C#)
+are indexed, with current status, in `spec/forever-plan.md`. They affect behaviour
 after load, not whether the addon loads.
 
 - **Identity (F17), verified in game 2026-10-02.**
@@ -289,10 +291,11 @@ after load, not whether the addon loads.
   **Local verification:** `tools/test-profession-sync.lua` passed all 28 checks on Lua
   5.1.5; `luac -p` passed for Core, Data, Comms and the regression script. In-game results
   for these fixes have not been supplied.
-- **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified.
+- **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified. Planned
+  as H7.
 - **Favorites store booleans.** `Modules/Favorites.lua` writes `favoriteRecipes[key] = true`
   and `favoriteMembers[key] = true` to `GuildCraftsCharDB`. Under the 1/0 rule, those need a
-  round-trip check on Forever, or a switch to `1`. Not changed yet.
+  round-trip check on Forever, or a switch to `1`. Not changed yet; planned as H13.
 
 ---
 
@@ -310,7 +313,18 @@ All on a Forever character, with the full TOC set installed:
    and a non-zero recipe count for that profession (scan verified 2026-10-02: Alchemy 5 of 197)
 8. In `/gc`, that profession → your name lists the same recipes (passed 2026-10-02)
 9. `/gc comms` first line reads `--- Comms Status (GuildCrafts dev) ---` from an unpackaged
-   copy, or the packaged version from a CurseForge build
+   copy, or the packaged version from a CurseForge build (passed 2026-10-03, `dev`)
+
+**Smoke test on merged `main` (`8f0dc69`), 2026-10-03, full TOC set, after a full relog:**
+- No Lua errors at login.
+- `/gc comms`: `Comms Status (GuildCrafts dev)`, `My role: DR`, `DR: Player-4619-012F81BC`,
+  `BDR: none`, `[1] Geo Prizm Player-4619-012F81BC (v3, …)`, `Total addon users: 1`.
+- `/gc dump`: `Local player: Player-4619-012F81BC`, guild key `Grim-Classic Beta PvP`, Cooking 12,
+  Herbalism 13, Alchemy 11, `Total: 1 members, 36 recipes`. Profession windows were opened
+  first, so the counts are fresh scans. No `Geo-Prizm` entry was left beside the GUID key.
+- `SP false false false false`.
+- Herbalism holds 13 recipes, so Forever gathering professions do have recipes. The Recipes
+  view still hides them for Herbalism and Skinning (`IsGatheringProfession`).
 
 ### Two-client checklist
 
@@ -435,7 +449,17 @@ Checked locally on 2026-10-02 against `a1c0554`:
 - The zip's TOC had `## Version: a1c0554` and `## X-Curse-Project-ID: 1469206`.
 - Without the strip, `-g forever` exited 1: `GuildCrafts.toc does not have an interface version
   that is compatible with the game version "forever"`.
-- Not yet run on GitHub's runners, and no real upload has been made.
+
+On GitHub on 2026-10-03, `workflow_dispatch` with `publish=false` (run `37093088953`, `main` at
+`8f0dc69`):
+- Strip, package and gate all passed, and publish was skipped. The gate printed
+  `forever-gate: OK (Game version: 1.60.1; GuildCrafts-8f0dc69-forever.zip; CTL v32)`.
+- The downloaded artifact held one TOC outside `Libs/`, `GuildCrafts/GuildCrafts_Camelot.toc`
+  (Interface 16001, `## Version: 8f0dc69`, project 1469206), and no `Data/`, docs, `CLAUDE.md`
+  or dotfiles. `README.md` opens with dkruenbo's credit, and `LICENSE` has both copyright lines.
+- The packager writes CRLF line endings. With `\r` stripped, the zipped ChatThrottleLib hashes
+  to the vetted v32 `3491b6c9…6dde8`.
+- No real CurseForge upload has been made yet.
 
 ### Draft-upload test plan
 
@@ -466,7 +490,10 @@ If you want nothing visible at all, stop after step 3.
 
 ---
 
-## Open questions — verify on live Forever
+## Question log
+
+Answers and partial answers from the in-game runs. Questions still open are tracked as Q1–Q7
+in `spec/forever-plan.md`.
 
 1. **Client build** of the 2026-10-02 runs. `GetBuildInfo()` printed only the `1.60.1` version
    string; the build number (second return) wasn't captured.

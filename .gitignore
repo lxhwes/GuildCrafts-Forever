@@ -17,4 +17,4 @@ SavedVariables/
 
 # Generator tooling (data files + scripts, not part of the addon)
 tools/*
-!tools/test-profession-sync.lua
+!tools/test-*.lua
