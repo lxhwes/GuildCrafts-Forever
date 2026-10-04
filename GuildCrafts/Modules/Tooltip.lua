@@ -144,7 +144,7 @@ function Tooltip:OnTooltipSetItem(tooltip, data)
     -- Get the item from the tooltip or from TooltipDataProcessor data
     local itemLink, itemID, itemName
     if tooltip.GetItem then
-        _, itemLink = tooltip:GetItem()
+        itemLink = select(2, tooltip:GetItem())
     end
     if itemLink then
         itemID = tonumber(itemLink:match("item:(%d+)"))

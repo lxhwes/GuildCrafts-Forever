@@ -973,7 +973,7 @@ function Comms:_OnProgressTimeout(sessionId)
 end
 
 --- Received by the sender when the requester reports missing chunks.
-function Comms:HandleSyncResume(payload, sender)
+function Comms:HandleSyncResume(payload)
     if not payload.sessionId or not payload.missing or #payload.missing == 0 then return end
 
     local session = self._outboundSessions[payload.sessionId]
