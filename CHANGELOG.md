@@ -1,5 +1,7 @@
   # Changelog
 
+  Entries above 2.0.2 are from the WoW Forever fork, [lxhwes/GuildCrafts-Forever](https://github.com/lxhwes/GuildCrafts-Forever). 2.0.2 and everything below it is upstream history from [dkruenbo/GuildCrafts](https://github.com/dkruenbo/GuildCrafts).
+
   ## Unreleased
 
   ### New features
@@ -15,7 +17,7 @@
   ### Fixes
 
   - **Profession drop/relearn sync** — drop history survives relearning and accompanies recipe deltas, so guildmates who missed the removal discard old recipes before accepting the new scan. `/gc drop` checks current professions rather than the login cache. Distinct removals sharing a timestamp both apply, and equal-version sync reconciles drop history. Protocol and data-format versions are now 3.
-  - **No chat taint from ChatThrottleLib on Forever** — the bundled ChatThrottleLib is now v32 (Ace3 r1403), which skips its byte count for secret chat values instead of calling `strlen` on them. The unused standalone v29 copy is removed.
+  - **ChatThrottleLib updated for secret chat values** — the bundled ChatThrottleLib is now v32 (Ace3 r1403), which skips its byte count for secret chat values instead of calling `strlen` on them. It's meant to stop the chat taint another addon hit with v31 on Forever. It hasn't been checked in game with GuildCrafts yet. The unused standalone v29 copy is removed.
   - **Forever members keyed by GUID** — Forever characters have a first name and a surname and no realm, so the old `Name-Realm` key never matched the guild roster. Every member would have been marked absent and tombstoned after 7 days. On Forever, GuildCrafts now keys members by GUID and reads names from the roster for display and whispers. Pre-GUID entries for your own character move to the new key automatically.
   - **No more profession purges from a bad read** — a profession that holds recipes is no longer deleted, or announced as dropped to the guild, just because the client's profession read came back empty or short. Forever has no skill-line fallback, so one empty read used to purge every profession for every guildmate. GuildCrafts now keeps the data, retries the read, and prints a hint; `/gc drop <profession>` is the only way to remove one. Peers ignore removals that don't come from `/gc drop` or predate that profession's stored update. Sync keeps recipes from empty reads unless it carries a later explicit drop.
 

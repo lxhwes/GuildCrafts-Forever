@@ -2,97 +2,90 @@
 
 ## What this project is
 
-WoW Classic addon supporting multiple game versions via multi-TOC:
-- Classic Era (Interface 11507)
-- TBC Anniversary (Interface 20506)
-- WotLK Classic (Interface 30403)
-- Cata Classic (Interface 40402)
-- MoP Classic (Interface 50504)
-- WoW Forever (Interface 16001, beta; Mainline API)
+The WoW Forever fork of GuildCrafts (`lxhwes/GuildCrafts-Forever`, from `dkruenbo/GuildCrafts`,
+MIT). Lua, AceAddon-3.0. It tracks guild members' profession recipes and syncs them between
+addon users through a DR/BDR election over the GUILD addon message channel.
 
-Lua, AceAddon-3.0 framework.
-Tracks guild members' profession recipes and syncs them across all addon users
-via a DR/BDR election system over the GUILD addon message channel.
+WoW Forever: Interface 16001, client 1.60.1, Mainline API, beta. It loads
+`GuildCrafts/GuildCrafts_Camelot.toc` (the client reads `_Camelot`, not `_Forever`; verified in
+game 2026-10-02).
+
+Only Forever is maintained and published here. That was the condition of the upstream
+author's permission (`docs/ORIGIN.md`).
+
+## Rules
+
+- Never edit the five Classic TOCs (`GuildCrafts.toc`, `_Vanilla`, `_Wrath`, `_Cata`, `_Mists`)
+  or `GuildCrafts/Data/Data_*.lua`. They are inherited and stay untouched.
+- No file published from this fork may be tagged for another flavor.
+- Gethe/wow-ui-source branch `forever` at pin 9a789c0 (1.60.1.70170) is the API source of
+  truth. It wins over docs and training data.
+- Feature-detect APIs. Never branch on interface number. Never hardcode IDs.
+- SavedVariables booleans may not round-trip on Forever; store 1/0 until proven otherwise.
+- Addon messages are restricted during encounters. Extend `SyncPausePolicy.lua` rather than
+  adding a parallel mechanism.
+- Players are keyed by GUID on Forever (`Modules/ForeverIdentity.lua`, Camelot TOC only).
+  Names are "First Surname" with no realm.
+- Read the relevant upstream RFC in `RFC/` before changing sync or election code. They are
+  historical, so check them against source and `spec/migration-forever.md`.
+
+---
+
+## Docs map
+
+| Doc | What it's for |
+|---|---|
+| `spec/forever-plan.md` | Planned work: phases to the Nov 4 launch, H/F/C/Q IDs, decisions. Check before proposing work |
+| `spec/migration-forever.md` | Dated decisions and in-game evidence |
+| `docs/releasing.md` | The release runbook |
+| `docs/testing.md` | Regression commands, solo and two-client procedures |
+| `docs/ingame-commands.md` | Copyable `/run` probes, mirrored to the gist |
+| `docs/user-guide.md` | Player-facing usage and limitations |
+| `docs/ORIGIN.md` | Provenance and the author's permission, quoted verbatim |
+| `RFC/`, other `spec/*.md`, `ROADMAP.md` | Upstream history, bannered as such |
 
 ---
 
 ## Build & Release
 
-### Publishing: Forever only, through the release workflow
-Only the Forever flavor is published from this fork. That was the condition of the upstream
-author's permission (`docs/ORIGIN.md`), so no published file may ever be offered to another
-flavor. **Never upload a hand-made zip.** `zip -r GuildCrafts/` ships all six TOCs.
+`.github/workflows/release.yml` is the only release path. **Never upload a hand-made zip.**
+`zip -r GuildCrafts/` ships all six TOCs. Procedure and safeguards: `docs/releasing.md`.
 
-`.github/workflows/release.yml` (BigWigs packager, pinned) is the only release path:
-- it deletes the five non-Forever TOCs and `Data/`;
-- it packages with `-d -g forever`, so a leftover non-Forever TOC makes `release.sh` exit;
-- it gates on the packager's `Game version:` line, the zip and the package folder before
-  anything uploads;
-- it publishes only from a `v*` tag. A tag name containing `alpha` or `beta` sets the
-  CurseForge release type.
-
-`.pkgmeta` `ignore:` keeps the same files out of local runs. It does **not** stop the packager
-tagging their flavors (`release.sh` reads TOCs before applying `ignore`), which is why the
-workflow deletes them. The draft-upload test plan is in `spec/migration-forever.md`.
-
-### Version bump checklist
-These must match before committing a version bump:
-
-| File | Field |
-|---|---|
-| `GuildCrafts/GuildCrafts.toc` | `## Version: X.Y.Z` |
-| `GuildCrafts/GuildCrafts_Vanilla.toc` | `## Version: X.Y.Z` |
-| `GuildCrafts/GuildCrafts_Wrath.toc` | `## Version: X.Y.Z` |
-| `GuildCrafts/GuildCrafts_Cata.toc` | `## Version: X.Y.Z` |
-| `GuildCrafts/GuildCrafts_Mists.toc` | `## Version: X.Y.Z` |
-| `CHANGELOG.md` | `## X.Y.Z — YYYY-MM-DD` |
-
-`GuildCrafts_Camelot.toc` (Forever) is not bumped by hand: its `## Version:` is
-`@project-version@`, filled in by the CurseForge packager. Forever reads the `_Camelot`
-suffix and ignores `_Forever` (verified in game, 1.60.1, 2026-10-02).
-
-`GuildCrafts.DISPLAY_VERSION` is read from the loaded TOC's `## Version:` at load, and reads
-`dev` when running unpackaged. `/gc comms` prints it on its first line.
-
-`GuildCrafts.VERSION` (integer) and `GuildCrafts.DATA_FORMAT_VERSION` (integer)
-are wire protocol versions — only increment when the sync protocol changes.
-Currently both are `3` (profession drop/relearn history and per-profession revisions).
+Versions:
+- `GuildCrafts_Camelot.toc` `## Version:` is `@project-version@`, filled in by the packager.
+  Never bump a TOC version by hand.
+- `GuildCrafts.DISPLAY_VERSION` is read from the loaded TOC at load. It reads `dev` when
+  unpackaged. `/gc comms` prints it on its first line.
+- `GuildCrafts.VERSION` and `GuildCrafts.DATA_FORMAT_VERSION` are wire protocol versions.
+  Only increment them when the sync protocol changes. Both are currently `3`.
 
 ---
 
 ## Git Workflow
 
-- Branch naming: `feature/patch-N-description`
-- PRs are **squash-merged** into `main`, branch deleted after merge
+- Branches: `feature/<description>`, `fix/<description>`, `docs/<description>`
+- PRs are squash-merged into `main`, branch deleted after merge
 - Force-push to feature branches is fine (they're never shared before PR)
 - After a rebase, use `git push --force-with-lease`
 
 ### Important
-Never commit, push, create a PR, or merge without explicit instruction from the user.
-
-### Full ship sequence for a patch
-
-```bash
-git push -u origin feature/patch-N-description
-gh pr create --title "feat: ..." --base main
-gh pr merge <num> --squash --delete-branch --subject "feat: ..."
-git tag vX.Y.Z && git push origin vX.Y.Z   # release workflow packages and uploads
-```
+Never commit, push, create a PR, merge, tag, or publish without explicit instruction from the
+user. A pushed `v*` tag publishes to CurseForge.
 
 ---
 
 ## CHANGELOG Conventions
 
+- New entries go under `## Unreleased` until a release
 - Date format: `YYYY-MM-DD`
 - Sections: `### New features`, `### Improvements`, `### Fixes`
+- Keep upstream's 2-space indentation
 
 ---
 
 ## Architecture Quick Reference
 
-The upstream author's RFCs in `RFC/` are the full reference for architecture, sync protocol,
-DR/BDR election, data model, UI and release. Read the relevant one before changing sync or
-election code. The summary below is the short version.
+A current architecture doc is planned (D1 cut 2 in `spec/forever-plan.md`). Until then:
 
 - **DR** (Designated Router): alphabetically first addon user; answers all
   `SYNC_REQUEST`s and broadcasts `HEARTBEAT` every 60s
@@ -100,10 +93,10 @@ election code. The summary below is the short version.
 - `syncRetryCount`: 0 = ask DR, 1 = ask BDR, 2 = evict both and re-elect
 - `currentTerm`: monotone integer incremented on DR promotion; stale messages
   (term < currentTerm) are silently dropped
-- `SyncPausePolicy`: suspends all outgoing sync during combat, instances, and
-  zone transitions (grace periods: 6s / 15s / 12s)
+- `SyncPausePolicy`: suspends outgoing sync during combat, instances, zone transitions
+  (grace periods 6s / 15s / 12s) and active addon restrictions (`C_RestrictedActions`)
 - Chunked transfers: one chunk per second via timer, `SYNC_CHUNK_SIZE = 5`
-  members per chunk; Patch 3 adds sessionId + RESUME recovery
+  members per chunk, sessionId + RESUME recovery
 
 ## Key Constants (Comms.lua)
 
@@ -118,47 +111,22 @@ election code. The summary below is the short version.
 
 ---
 
-## Planned Work
-
-`spec/forever-plan.md` is the source of truth for planned Forever work: phases to the
-Nov 4 launch, open questions, decisions, and the fork-review finding index (F#, C#).
-`spec/implementation-plan-v2.md` is upstream's patch history.
-
-Current status:
-- ✅ Patch 1 — SyncPausePolicy + Partial Scan Protection (v1.4.0)
-- ✅ Patch 2 — DELTA_AD broadcast (v1.5.0)
-- ✅ Patch 3 — Chunk RESUME recovery (v1.6.0)
-- ✅ Patch 4 — Per-peer backoff (v1.7.0)
-- ✅ Patch 5 — Tombstone pruning (v1.8.0)
-- ✅ Multi-expansion support — branch: `feature/multi-expansion-support`
-- 🚧 WoW Forever support — branch: `feature/forever-support`; see `spec/migration-forever.md`
-
----
-
 ## Folder Structure
 
 ```
 GuildCrafts/
   Core.lua                 -- Bootstrap, events, slash commands
-  GuildCrafts.toc          -- TBC Anniversary (default)
-  GuildCrafts_Vanilla.toc  -- Classic Era
-  GuildCrafts_Wrath.toc    -- WotLK Classic
-  GuildCrafts_Cata.toc     -- Cata Classic
-  GuildCrafts_Mists.toc    -- MoP Classic
-  GuildCrafts_Camelot.toc  -- WoW Forever (Mainline API)
+  GuildCrafts_Camelot.toc  -- WoW Forever (the only maintained TOC)
+  GuildCrafts*.toc         -- Five inherited Classic TOCs (untouched)
   Modules/
     Data.lua               -- Scanning, merging, pruning, compat wrappers
     ForeverIdentity.lua    -- Forever only (Camelot TOC): GUID member keys, roster names
     Comms.lua              -- Sync protocol, DR/BDR election
-    SyncPausePolicy.lua    -- Combat/instance pause
+    SyncPausePolicy.lua    -- Combat/instance/restriction pause
     Favorites.lua          -- Bookmark system
     Tooltip.lua            -- Item tooltip injection
     MinimapButton.lua      -- LDB minimap icon
-  Data/
-    Data_TBC.lua           -- TBC recipe keys (static)
-    Data_WOTLK.lua         -- WotLK recipe keys (static)
-    Data_CATA.lua          -- Cata recipe keys (static)
-    Data_MOP.lua           -- MoP recipe keys (static)
+  Data/                    -- Inherited Classic recipe data (untouched; not shipped)
   UI/
     MainFrame.lua          -- All UI panels
   Libs/                    -- Embedded libraries
@@ -168,7 +136,9 @@ GuildCrafts/
 
 ## Verification
 
-Regression tests run from the repository root under PUC Lua 5.1, with stubbed WoW APIs:
+Run the regression tests from the repository root under PUC Lua 5.1 before every commit. If
+`lua5.1` isn't on PATH, use `/Users/alex/code/legacynext/tools/lua51/bin/lua` (`luac` and
+`luacheck` live alongside it).
 
 ```bash
 lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read floor
@@ -176,10 +146,8 @@ lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster na
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
 ```
 
-Each exits non-zero on a failure. They don't exercise the game client or transport.
-Verification of gameplay remains manual in-game. Key things to check
-after any sync-layer change: `/gc comms` debug output, chunk delivery in a
-multi-user guild session, role election log.
+Each exits non-zero on a failure. They stub WoW APIs and don't exercise the game client or
+transport. In-game procedures are in `docs/testing.md`.
 
 ---
 
