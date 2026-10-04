@@ -16,6 +16,7 @@ lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster na
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
 lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
 lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
+lua5.1 tools/test-tooltip-index.lua     # tooltip index rebuild debounce (F9)
 ```
 
 If `lua5.1` isn't on your PATH, Alex's PUC Lua 5.1.5 toolchain is at

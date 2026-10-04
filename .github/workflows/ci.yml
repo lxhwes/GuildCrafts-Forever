@@ -52,3 +52,6 @@ jobs:
 
       - name: Favorites SavedVariables
         run: lua5.1 tools/test-favorites.lua
+
+      - name: Tooltip index scheduling
+        run: lua5.1 tools/test-tooltip-index.lua

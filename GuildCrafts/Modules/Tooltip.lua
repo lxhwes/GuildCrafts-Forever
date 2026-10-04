@@ -24,16 +24,33 @@ local indexByID   = {}   -- [itemID]   = { {key=memberKey, profName=...}, ... }
 local indexByName = {}   -- [itemName] = { {key=memberKey, profName=...}, ... }
 local indexDirty  = true -- flag to rebuild on next tooltip
 
+local REBUILD_DELAY = 2  -- seconds after the last data change
+
+--- Arm the deferred rebuild for REBUILD_DELAY after now. C_Timer.After returns
+--- no handle, so at most one timer is kept pending (_rebuildPending) and it
+--- re-arms itself until the latest deadline has passed.
+function Tooltip:ScheduleRebuild()
+    self._rebuildAt = GetTime() + REBUILD_DELAY
+    if self._rebuildPending then return end
+    self._rebuildPending = true
+    C_Timer.After(REBUILD_DELAY, function() self:OnRebuildTimer() end)
+end
+
+function Tooltip:OnRebuildTimer()
+    local wait = (self._rebuildAt or 0) - GetTime()
+    if wait > 0 then
+        C_Timer.After(wait, function() self:OnRebuildTimer() end)
+        return
+    end
+    self._rebuildPending = false
+    if indexDirty then self:RebuildIndex() end
+end
+
 --- Mark the index as stale and schedule a deferred rebuild (2 s after the
---- last data change, well clear of sync bursts and never during a hover).
+--- last data change, so a sync burst costs one rebuild, never during a hover).
 function Tooltip:InvalidateIndex()
     indexDirty = true
-    if not self._rebuildTimer then
-        self._rebuildTimer = C_Timer.After(2, function()
-            self._rebuildTimer = nil
-            if indexDirty then self:RebuildIndex() end
-        end)
-    end
+    self:ScheduleRebuild()
 end
 
 --- Rebuild the reverse lookup index from the full database.
@@ -42,12 +59,7 @@ function Tooltip:RebuildIndex()
     -- for every tracked recipe.  Running during combat can spike frame time and
     -- cause the lag players report.  Defer until the player leaves combat.
     if InCombatLockdown() then
-        if not self._rebuildTimer then
-            self._rebuildTimer = C_Timer.After(2, function()
-                self._rebuildTimer = nil
-                if indexDirty then self:RebuildIndex() end
-            end)
-        end
+        self:ScheduleRebuild()
         return
     end
 
