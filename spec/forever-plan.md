@@ -173,6 +173,40 @@ Anything raid-adjacent waits for Dec 9.
 
 ---
 
+## Later (ideas, not committed)
+
+[Milestone](https://github.com/lxhwes/GuildCrafts-Forever/milestone/6). Feature ideas from
+[`spec/later-backlog.md`](later-backlog.md), which has the privacy rules and the suggested order.
+Nothing here starts before the Oct 28 feature freeze has passed and the launch build is out.
+
+N: out of game (export, companion, web, Discord). N4's design gates every external service.
+
+| ID | Issue | Item | Depends on |
+|---|---|---|---|
+| N1 | [#51] | `/gc export` copy frame | N2 [#52] for the opt-out filter; N1 can ship first |
+| N2 | [#52] | Per-character opt-out (audit X3) | [#34] if bundled with protocol v4 |
+| N3 | [#53] | Companion export block in SavedVariables | N1 [#51], N2 [#52], H3 [#6] |
+| N4 | [#54] | Design: companion, web and Discord bot (ADR + threat model) | N1 [#51] schema draft |
+| N5 | [#55] | Companion uploader | N3 [#53], N4 [#54], N6 [#56] |
+| N6 | [#56] | Web backend: tenancy, auth and isolation | N4 [#54] |
+| N7 | [#57] | Web recipe book | N6 [#56] |
+| N8 | [#58] | Discord bot | N6 [#56] |
+| N9 | [#59] | Spike: does Blizzard's web API cover Forever? | — |
+
+G: in game.
+
+| ID | Issue | Item | Depends on |
+|---|---|---|---|
+| G1 | [#60] | Recipe-scroll tooltip alert | An in-game probe; C5 [#31] if no API exists; H16 [#19] |
+| G2 | [#61] | Coverage view: single-crafter and missing recipes | C5 [#31], for missing recipes only |
+| G3 | [#62] | Reagent check in recipe detail | — |
+| G4 | [#63] | Favorite crafter online alert | H19 [#44] (F33) |
+| G5 | [#64] | "Recently learned" feed | H2 [#5] |
+| G6 | [#65] | Raid consumables view (for Dec 9) | H15 [#18], C4 [#30] |
+| G7 | [#66] | Public API for other addons | N2 [#52] |
+
+---
+
 ## Open questions
 
 | # | Question | Issue | Answered by |
@@ -203,6 +237,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 | 2026-10-03 | Documentation refresh in two cuts (D1). Inherited docs get history banners in place rather than moving to an archive |
 | 2026-10-03 | GitHub Issues is the tracker. This file keeps phases, gates and the ID index |
 | 2026-10-03 | H1: get luacheck to zero warnings first, then CI fails on any warning |
+| 2026-10-03 | Later backlog N1–N9, G1–G7 added from `spec/later-backlog.md`; N4 design gates all external services |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 
 ---
@@ -314,3 +349,19 @@ Evidence and line numbers (at `60c6b32`) are in
 [#39]: https://github.com/lxhwes/GuildCrafts-Forever/issues/39
 [#44]: https://github.com/lxhwes/GuildCrafts-Forever/issues/44
 [#45]: https://github.com/lxhwes/GuildCrafts-Forever/issues/45
+[#51]: https://github.com/lxhwes/GuildCrafts-Forever/issues/51
+[#52]: https://github.com/lxhwes/GuildCrafts-Forever/issues/52
+[#53]: https://github.com/lxhwes/GuildCrafts-Forever/issues/53
+[#54]: https://github.com/lxhwes/GuildCrafts-Forever/issues/54
+[#55]: https://github.com/lxhwes/GuildCrafts-Forever/issues/55
+[#56]: https://github.com/lxhwes/GuildCrafts-Forever/issues/56
+[#57]: https://github.com/lxhwes/GuildCrafts-Forever/issues/57
+[#58]: https://github.com/lxhwes/GuildCrafts-Forever/issues/58
+[#59]: https://github.com/lxhwes/GuildCrafts-Forever/issues/59
+[#60]: https://github.com/lxhwes/GuildCrafts-Forever/issues/60
+[#61]: https://github.com/lxhwes/GuildCrafts-Forever/issues/61
+[#62]: https://github.com/lxhwes/GuildCrafts-Forever/issues/62
+[#63]: https://github.com/lxhwes/GuildCrafts-Forever/issues/63
+[#64]: https://github.com/lxhwes/GuildCrafts-Forever/issues/64
+[#65]: https://github.com/lxhwes/GuildCrafts-Forever/issues/65
+[#66]: https://github.com/lxhwes/GuildCrafts-Forever/issues/66
