@@ -1,54 +1,93 @@
-# GuildCrafts
+# GuildCrafts for WoW Forever
 
-GuildCrafts is by [dkruenbo](https://github.com/dkruenbo/GuildCrafts). The WoW Forever
-flavor is maintained by Alex Howes with the author's permission; see
-[docs/ORIGIN.md](docs/ORIGIN.md). Licensed under MIT, see [LICENSE](LICENSE).
+GuildCrafts was written by [dkruenbo](https://github.com/dkruenbo/GuildCrafts) (`_Lektor`).
+Alex Howes maintains this WoW Forever flavor with the author's permission. The permission and
+its terms are in
+[docs/ORIGIN.md](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/ORIGIN.md).
+Licensed under MIT, see [LICENSE](LICENSE).
 
-A World of Warcraft Classic addon that builds a guild-wide recipe book — automatically scanning, storing, and syncing every learned recipe across all guild members.
+GuildCrafts builds a shared recipe book for your guild. When you open a profession window, it
+records the recipes you know. It then shares them with every other guild member running
+GuildCrafts, over the guild's addon message channel.
 
-Supports Classic Era, TBC Anniversary, WotLK Classic, Cata Classic, MoP Classic, and WoW Forever via multi-TOC.
+## Status
 
-## Repository Structure
+- This fork supports WoW Forever only: Interface 16001, client 1.60.1, currently in beta.
+  Launch is planned for 2026-11-04.
+- No Forever build has been published to CurseForge yet. Until one is, install from a GitHub
+  checkout (below).
+- The five Classic TOCs (Classic Era, TBC, Wrath, Cata, Mists) and `GuildCrafts/Data/` came
+  with upstream. They stay in the tree untouched, but this fork doesn't maintain or publish
+  them. If you play a Classic flavor, use upstream
+  [dkruenbo/GuildCrafts](https://github.com/dkruenbo/GuildCrafts).
 
-### `GuildCrafts/`
+## What it does
 
-The addon itself. This is the folder you drop into `World of Warcraft/_classic_/Interface/AddOns/`. It contains all Lua source code, TOC files for each game version, embedded libraries, and an addon-specific [README.md](GuildCrafts/README.md) with feature list, slash commands, and installation instructions.
+- Records your recipes and their reagents each time you open a profession window.
+- Syncs recipes between GuildCrafts users in the same guild. New recipes go out as soon as
+  they're scanned, and each login runs a catch-up sync.
+- Lets you browse by profession: who has it and at what skill, what each member can craft, and
+  every recipe the guild knows with its crafters.
+- Searches recipe, profession and member names.
+- Adds a crafter list to item tooltips.
+- Saves favorite recipes and members per character.
+- Links recipes to chat with shift-click, and posts a crafter list to guild chat. Posting
+  hasn't been confirmed on Forever yet.
+- Has a whisper button for crafters. It doesn't handle Forever's two-word names yet (F20 in the
+  plan).
+- Answers `!gc <recipe>` typed in guild chat. This reply hasn't been confirmed on Forever yet.
+- Pauses outgoing sync during combat, instances, zone changes and Forever's addon restrictions.
 
-| File | Purpose |
-|---|---|
-| `Core.lua` | Entry point — addon initialisation, event routing, slash commands |
-| `Modules/Data.lua` | Recipe scanning, profession detection, expansion classification, data storage, merge logic |
-| `Modules/ForeverIdentity.lua` | WoW Forever only: keys members by GUID and reads display names from the guild roster |
-| `Modules/Comms.lua` | Network layer — DR/BDR election, sync protocol, delta updates, craft messages |
-| `Modules/SyncPausePolicy.lua` | Pause gate — suppresses outgoing sync during combat, instances, and zone transitions |
-| `Modules/Tooltip.lua` | Item tooltip hook — shows guild crafters on hover |
-| `Modules/MinimapButton.lua` | Draggable minimap icon toggle |
-| `Modules/Favorites.lua` | Bookmark/star system |
-| `Data/Data_TBC.lua` | Pre-generated TBC recipe lookup table |
-| `Data/Data_WOTLK.lua` | Pre-generated WotLK recipe lookup table |
-| `Data/Data_CATA.lua` | Pre-generated Cata recipe lookup table |
-| `Data/Data_MOP.lua` | Pre-generated MoP recipe lookup table |
-| `UI/MainFrame.lua` | Two-panel browse/search interface |
-| `Libs/` | Embedded libraries (Ace3, LibDeflate, ChatThrottleLib) |
-| `GuildCrafts*.toc` | Addon metadata and load order (one per game version) |
+The recipe book only covers guild members who run GuildCrafts and have opened their
+profession windows. A guildmate without the addon, or one who hasn't scanned yet, isn't in it.
 
-Member identities use a canonical `Name-Realm` key. Connected-realm display
-punctuation is normalized consistently across roster data, addon messages,
-saved data, and election state; existing entries are merged on first access.
+## Install
 
-### `spec/`
+When release builds exist, the zip unpacks to a single `GuildCrafts` folder. Put it in the
+Forever client's `Interface/AddOns/`.
 
-Design documents and planning files. Not part of the addon — these are reference material for development.
+For now, install from a checkout:
 
-| File | Purpose |
-|---|---|
-| `spec.md` | Full technical specification — data model, sync protocol, UI layout, API usage |
-| `tech-stack.md` | Libraries and technology choices with rationale |
-| `improvements.md` | Tiered feature roadmap with implementation status |
-| `implementation-plan.md` | Original build plan and milestone sequence |
-| `implementation-plan-v2.md` | Patch-based plan for sync reliability and multi-expansion |
-| `migration-classic-era.md` | Classic Era (1.15.x) compatibility notes |
-| `migration-wotlk.md` | WotLK Classic (3.4.x) compatibility notes |
-| `migration-mop.md` | MoP Classic (5.5.x) compatibility notes |
-| `migration-forever.md` | WoW Forever (1.60.x) compatibility notes |
-| `forever-plan.md` | Planned Forever work to launch: phases, open questions, decisions |
+```bash
+git clone https://github.com/lxhwes/GuildCrafts-Forever.git
+```
+
+1. Find the `GuildCrafts` folder inside the clone. It's the one holding
+   `GuildCrafts_Camelot.toc`.
+2. Copy or symlink that folder into the Forever client's `Interface/AddOns/`. Its name there
+   must stay `GuildCrafts`.
+3. Restart the client, or type `/reload` if it's running.
+
+The checkout carries all six TOC files. Forever loads only `GuildCrafts_Camelot.toc`. A
+checkout reports its version as `dev` in `/gc comms`.
+
+## First run
+
+1. Log in on a character that's in a guild.
+2. Open each of your profession windows once. Chat prints
+   `Scanned <profession>: <n> new recipe(s) found.` for each new batch.
+3. Type `/gc`, or click the minimap button, to open the window.
+4. Type `/gc dump` to check what was stored for you.
+
+About five seconds after login, GuildCrafts lists any profession it hasn't seen recipes for
+yet. Open those windows too. After you learn new recipes, open the window again to share them.
+
+## Documentation
+
+- [User guide](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/user-guide.md):
+  views, search, commands, known limitations and troubleshooting
+- [Contributing](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/CONTRIBUTING.md):
+  scope, setup, pull requests and bug reports
+- [Testing](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/testing.md)
+- [Releasing](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/releasing.md)
+- [Forever plan](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/spec/forever-plan.md):
+  planned work to launch and the open findings
+- [Origin and permission](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/ORIGIN.md)
+- [Upstream RFCs](https://github.com/lxhwes/GuildCrafts-Forever/tree/main/RFC): upstream's
+  architecture, sync protocol, data model, UI and release design. They're historical
+  reference and describe upstream's Classic behaviour, so check the code where Forever differs.
+- [Changelog](CHANGELOG.md)
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
