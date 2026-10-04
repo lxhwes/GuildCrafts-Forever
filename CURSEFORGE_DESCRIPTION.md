@@ -1,3 +1,5 @@
+<!-- Historical (upstream). This is upstream's copy of the description for the shared CurseForge project page, written by dkruenbo for the Classic addon. This fork doesn't maintain it. Never paste this file to CurseForge with this comment in it. A proposed shared description is planned in spec/forever-plan.md (D1 cut 2). -->
+
 > **GuildCrafts is no longer actively maintained. Version 2.0.2 is the final release from the original maintainer. The project remains available for community forks and adoption.**
 
 # GuildCrafts — Guild Profession Tracker for WoW Classic

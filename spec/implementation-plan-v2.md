@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](forever-plan.md). Planned work now lives in [`spec/forever-plan.md`](forever-plan.md).
+
 # GuildCrafts — Implementation Plan v2
 
 > Planned improvements following the v1 release. Each item is self-contained and can be implemented independently. Ordered by estimated value-to-effort ratio.

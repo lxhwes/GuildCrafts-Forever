@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](forever-plan.md). Planned work now lives in [`spec/forever-plan.md`](forever-plan.md).
+
 # GuildCrafts — Ranked Improvements & Suggestions
 
 > **Maintenance mode.** The addon is feature complete for its original scope. Items marked **DONE** have been implemented. Remaining items are not currently planned — see [CONTRIBUTING.md](../CONTRIBUTING.md) if you want to take one on.
