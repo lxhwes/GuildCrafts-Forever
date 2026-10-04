@@ -139,3 +139,59 @@ Run anywhere. `true`/`false` for whether each chat API exists: global `ChatEdit_
 ```
 /run print("CHL",ChatEdit_InsertLink~=nil,ChatFrame_OpenChat~=nil,ChatFrameUtil~=nil and ChatFrameUtil.InsertLink~=nil,ChatFrameUtil~=nil and ChatFrameUtil.OpenChat~=nil);
 ```
+
+## TIME
+
+Run anywhere (H2). `GetServerTime()`, local `time()`, server minus local in seconds, and server time as UTC. The UTC time should match the real UTC time, and the difference should be a few seconds at most on a clock that syncs over the network. `nil` means `GetServerTime` is missing.
+
+```
+/run local s=GetServerTime and GetServerTime();local l=time();print("TIME",s,l,s and s-l,s and date("!%Y-%m-%d %H:%M:%S",s));
+```
+
+## BLD
+
+Run anywhere (Q1). Every `GetBuildInfo()` return: version, build number, build date, interface number, localized version, build info.
+
+```
+/run print("BLD",GetBuildInfo());
+```
+
+## GTS
+
+Run with your own profession window open, then again with a guildmate's profession opened from the guild roster, if the client offers one (H10). One line per `C_TradeSkillUI` function: its name, then its return value. `nil` means the function doesn't exist, and text instead of `true`/`false` is the error it raised. On your own profession, everything after `IsGuildTradeSkillsEnabled` should be `false`.
+
+```
+/run local T=C_TradeSkillUI;for _,f in ipairs{"IsGuildTradeSkillsEnabled","IsTradeSkillLinked","IsTradeSkillGuild","IsTradeSkillGuildMember","IsNPCCrafting"}do local g=T[f];print("GTS",f,g and tostring(select(2,pcall(g)))or"nil");end;
+```
+
+## CHT
+
+Run anywhere (H14). `true`/`false` for global `SendChatMessage`, `C_ChatInfo.SendChatMessage`, whether the two are the same function, global `ChatFrame_SendTell`, `ChatFrameUtil.SendTell`, `ChatFrameUtil.ReplyTell`. GuildCrafts' `!gc` replies call the first.
+
+```
+/run local C,U=C_ChatInfo,ChatFrameUtil;print("CHT",SendChatMessage~=nil,C.SendChatMessage~=nil,SendChatMessage==C.SendChatMessage,ChatFrame_SendTell~=nil,U~=nil and U.SendTell~=nil,U~=nil and U.ReplyTell~=nil);
+```
+
+## TELL
+
+Run anywhere, after CHT (H14). Opens a whisper to your own two-word name and sends nothing. Prints your name and whether a tell function exists. If the chat box header reads `Tell First Surname:` with both words, the tell API handles two-word names. Press Escape to close it.
+
+```
+/run local n=UnitName("player");local U=ChatFrameUtil;local f=U and U.SendTell or ChatFrame_SendTell;print("TELL",n,f~=nil);if f then f(n);end;
+```
+
+## RL
+
+Run anywhere (H7). `true`/`false` for whether `ReloadUI` and `C_UI.Reload` exist, then whether `ReloadUI` is still Blizzard's untainted copy.
+
+```
+/run print("RL",ReloadUI~=nil,C_UI~=nil and C_UI.Reload~=nil,issecurevariable("ReloadUI"));
+```
+
+## RLX
+
+Run last, out of combat, when a reload is fine (H7). It calls `ReloadUI()` from addon code the way `/gc reset` does. If the UI reloads, it isn't protected. If you see `RLX call` and then an `RLX ADDON_ACTION_FORBIDDEN` or `ADDON_ACTION_BLOCKED` line, or a popup, and the UI doesn't reload, it is protected.
+
+```
+/run local f=CreateFrame("Frame");pcall(f.RegisterEvent,f,"ADDON_ACTION_FORBIDDEN");pcall(f.RegisterEvent,f,"ADDON_ACTION_BLOCKED");f:SetScript("OnEvent",function(_,e,a,x)print("RLX",e,a,x);end);print("RLX call");ReloadUI();
+```
