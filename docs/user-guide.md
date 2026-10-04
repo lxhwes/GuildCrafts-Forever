@@ -144,6 +144,7 @@ The reply hasn't been confirmed on Forever yet (H14).
 | `/gc` | Opens or closes the main window |
 | `/gc dump` | Prints your member key, the guild key, each of your stored professions with its recipe count, and the total members and recipes in the database |
 | `/gc comms` | Prints the GuildCrafts version, your sync role, the DR and BDR, whether a sync is pending, the sync queue length, and each addon user seen with their protocol version |
+| `/gc report` | Opens a box with a diagnostic report to copy into a bug report: version, client build, your keys, recipe counts, sync and pause state, and recent debug lines. Press Ctrl-C to copy it |
 | `/gc debug` | Turns debug output in chat on or off. It's off again after every login and `/reload` |
 | `/gc mem` | Prints how much memory GuildCrafts is using |
 | `/gc minimap` | Shows or hides the minimap button |
@@ -213,8 +214,8 @@ These are open in the current beta build. Each has a plan ID.
 ### My recipes don't show
 
 Open the profession window, then type `/gc dump`. Your profession should list a non-zero
-recipe count. If it reads 0, type `/gc debug`, open the window again, and report what chat
-prints.
+recipe count. If it reads 0, type `/gc report`, press Ctrl-C, and paste the text into your bug
+report.
 
 ### A guildmate is missing
 

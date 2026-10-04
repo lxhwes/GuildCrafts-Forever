@@ -8,12 +8,13 @@ In-game probes are referred to by their tag (`TOC`, `RA`, `SP` and so on) and li
 
 ## Regression scripts
 
-Run all three from the repository root before every commit and every release:
+Run all four from the repository root before every commit and every release:
 
 ```bash
 lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read floor
 lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster names
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
+lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
 ```
 
 If `lua5.1` isn't on your PATH, Alex's PUC Lua 5.1.5 toolchain is at
@@ -37,6 +38,9 @@ what a Forever API returns. The manual checklists below cover that.
 - Chat. GuildCrafts prefixes its lines with `GuildCrafts:`. `[debug]` lines only print after
   `/gc debug`, and debug mode resets at every login and `/reload`, so turn it on again each
   time.
+- Report. `/gc report` opens a copy box with the client build, keys, recipe counts, sync and
+  pause state, and the last 200 debug lines, kept even with debug mode off and across
+  `/reload`. Paste it with any result that looks wrong.
 - Keys. On Forever each member is keyed by GUID (`Player-4619-…`). `/gc dump` prints yours on
   its first line, `Local player: <key>`. `/gc comms` lists each addon user as `<name> <GUID>`.
 - Offline gaps. When a step logs a client out and back in, wait at least 4 minutes between.
