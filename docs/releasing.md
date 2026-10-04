@@ -128,8 +128,24 @@ and a GitHub release is left behind.
    ```bash
    for t in tools/test-*.lua; do lua5.1 "$t" || echo "FAILED: $t"; done
    ```
-3. Run the solo checklist in `docs/testing.md` on the commit you'll tag.
-4. Fetch and note the full SHA you'll tag.
+3. Check out `origin/main` in a detached worktree for the Codex review.
+   ```bash
+   git fetch origin && git worktree add --detach ../GuildCrafts-release-review origin/main
+   ```
+4. From that worktree, run an adversarial Codex review against the previous `v*` tag. For the
+   first tag, use `e78c4c9`, the upstream fork point. Run it outside the sandbox, because
+   Codex writes to `~/.codex`.
+   ```bash
+   node ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs adversarial-review --wait --base <base> "How the changes in this range interact: sync, election, prune, GUID identity. Review GuildCrafts/ only; ignore Libs/, docs and specs."
+   ```
+5. Fix or rebut every finding as `CLAUDE.md` "Codex review findings" says, and record the
+   outcome in `spec/migration-forever.md`. A fix changes `main`, so start again from step 2.
+6. Remove the review worktree.
+   ```bash
+   git worktree remove ../GuildCrafts-release-review
+   ```
+7. Run the solo checklist in `docs/testing.md` on the commit you'll tag.
+8. Fetch and note the full SHA you'll tag. It must be the commit reviewed in step 4.
    ```bash
    git fetch origin && git rev-parse origin/main
    ```

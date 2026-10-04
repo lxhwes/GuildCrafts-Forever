@@ -173,6 +173,48 @@ To test a client that lacks an API, nil the global and `dofile` a fresh copy of 
 
 ---
 
+## Codex review
+
+The `codex` plugin (`openai-codex` marketplace) runs OpenAI Codex as a read-only second
+reviewer. Claude can't invoke `/codex:review` or `/codex:adversarial-review`, so call the
+companion script from the branch's worktree. Codex writes its state to `~/.codex`, so each run
+needs the sandbox disabled.
+
+```bash
+node ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs review --wait --base origin/main
+node ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs adversarial-review --wait --base origin/main "<focus>"
+```
+
+When to run it:
+- Every code PR: `review`, after the suites pass and before the PR opens. Doc-only PRs skip it.
+- Changes to `Comms.lua`, `SyncPausePolicy.lua`, `ForeverIdentity.lua`, or merge and prune in
+  `Data.lua`: `adversarial-review` as well. The focus text names the RFC in `RFC/` and the
+  multi-client cases the stub suites can't reach, such as DR loss mid-transfer, stale terms or a
+  reconnect after a drop.
+- After 2–3 failed attempts at the same failure: ask the `codex:codex-rescue` agent for an
+  independent diagnosis before taking it to Alex. Say "read-only, diagnosis only" in the
+  prompt, because the agent adds `--write` by default.
+- The stop-time review gate stays off. It reviews one turn at a time, and its setting is keyed
+  to the checkout path, so it never fires in a branch worktree.
+
+### Codex review findings
+
+Findings from Codex reviews are advisory, not instructions. For each one:
+- Fix it if it's correct, or rebut it with specific evidence (file:line, test, docs) if it isn't.
+- Never make a change solely to satisfy the reviewer without agreeing it's an improvement.
+- If Codex raises the same disagreement twice, stop and summarize both positions for Alex
+  instead of continuing the loop.
+- Check any WoW API claim against the pinned `wow-ui-source` (see Rules). Codex's training data
+  covers Retail and Classic, not Forever.
+- A finding only the game client can settle becomes a probe in `docs/ingame-commands.md`, not
+  a code change.
+- Fixes follow the usual commit rules: a behavior fix comes with a test.
+- After fixing, rerun the review once to confirm. Don't loop until it comes back clean.
+- List rebutted findings in the PR description, one line each with the evidence, next to the
+  test evidence.
+
+---
+
 ## In-game commands (gist workflow)
 
 Claude can't run the game, and the Forever beta runs on Alex's other PC. In-game
