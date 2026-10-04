@@ -32,8 +32,8 @@ N2 opt-out ──┬─► N1 export ──► N3 companion block ──► N5 c
 | N8 | [N8-discord-bot.md](N8-discord-bot.md) | new | Yes. Error 1015 risk on feed posts only | N6 |
 
 N9 ([#59]) was answered during this work. Battle.net has no Forever API namespace, and the Classic
-profile APIs have no professions endpoint (`research/2026-10-03-companion-n9.md`, Part B). Record
-it in `spec/migration-forever.md` and close #59 when Alex agrees.
+profile APIs have no professions endpoint (`research/2026-10-03-companion-n9.md`, Part B).
+#59 was closed as not planned on 2026-10-04.
 
 ## Decisions made 2026-10-04 (Alex)
 
@@ -43,7 +43,7 @@ it in `spec/migration-forever.md` and close #59 when Alex agrees.
 - The companion block is a separate SavedVariable, `GuildCraftsExport`.
 - Multi-tenant design, launching with one operator-provisioned tenant (Alex's guild).
 - Cloudflare Workers Paid ($5/month).
-- One new monorepo for companion, Worker and web app.
+- One new monorepo for companion, Worker and web app: `lxhwes/GuildCrafts-Companion`.
 - Unsigned companion binaries for the first testers; Certum later.
 
 ## Findings from this work

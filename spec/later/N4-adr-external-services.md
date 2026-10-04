@@ -22,7 +22,7 @@ APIs have no professions endpoint (research file, Part B).
 
 | ID | Decision | By |
 |---|---|---|
-| AD1 | One new repository, a monorepo for companion, Worker and shared schema fixtures. Working name `lxhwes/GuildCrafts-Companion`. N5–N8 move to its tracker once this ADR is accepted; the issues here close with a link. N1–N3 and `docs/export-format.md` stay in the addon repo, which owns the schema | Alex (repo); name to confirm |
+| AD1 | One new repository, a monorepo for companion, Worker and shared schema fixtures. Repository `lxhwes/GuildCrafts-Companion` (name confirmed by Alex 2026-10-04). N5–N8 move to its tracker once this ADR is accepted; the issues here close with a link. N1–N3 and `docs/export-format.md` stay in the addon repo, which owns the schema | Alex (repo and name) |
 | AD2 | Cloudflare Workers Paid ($5/mo). One Worker serves the API, the static web app, Discord interactions, cron and Discord webhook events. D1 for metadata, R2 for snapshots | Alex |
 | AD3 | Multi-tenant data model and isolation tests from day one. At launch there is one tenant, Alex's guild, provisioned by the operator. Self-serve tenant creation by any Discord admin is a later milestone with its own go-live checklist (privacy policy, abuse contact, deletion path) | Alex |
 | AD4 | Tenancy by a `tenant_id` column in one shared D1 database, not a database per tenant. Every query goes through one tenant-scoped access layer | Proposed. Per-tenant D1 needs a redeploy per tenant and N-way migrations (research) |
