@@ -1,0 +1,48 @@
+name: CI
+
+# Lint and regression tests. The suites stub WoW APIs and run under PUC Lua 5.1, the same
+# commands docs/testing.md lists.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    env:
+      LUACHECK_VERSION: 1.2.0-1
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends lua5.1 liblua5.1-0-dev luarocks
+          sudo luarocks --lua-version=5.1 install luacheck "$LUACHECK_VERSION"
+          lua5.1 -v
+          luacheck --version
+
+      - name: Lint
+        working-directory: GuildCrafts
+        run: luacheck . --no-color
+
+      - name: Profession drop and relearn
+        run: lua5.1 tools/test-profession-sync.lua
+
+      - name: Forever identity
+        run: lua5.1 tools/test-forever-identity.lua
+
+      - name: Profession skill-line gate
+        run: lua5.1 tools/test-profession-gate.lua
