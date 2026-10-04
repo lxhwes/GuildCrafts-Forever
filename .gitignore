@@ -18,3 +18,4 @@ SavedVariables/
 # Generator tooling (data files + scripts, not part of the addon)
 tools/*
 !tools/test-*.lua
+!tools/test-*.sh
