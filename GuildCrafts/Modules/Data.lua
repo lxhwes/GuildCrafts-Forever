@@ -65,6 +65,12 @@ local function IsSpellKnownCompat(spellID)
     return false
 end
 
+-- Whether the client can list skill lines at all. Forever can't (SKL probe, 2026-10-02).
+local function HasSkillLineSource()
+    return (C_SkillLine and C_SkillLine.GetSkillLines) ~= nil
+        or (GetNumSkillLines ~= nil and GetSkillLineInfo ~= nil)
+end
+
 -- C_SkillLine (WotLK+) replaces GetNumSkillLines/GetSkillLineInfo.
 local function IterSkillLines()
     if C_SkillLine and C_SkillLine.GetSkillLines then
@@ -679,9 +685,7 @@ end
 function Data:ReadCurrentProfessions()
     local currentProfs = {}
     local skillLevels = {}  -- profName -> { rank, max }
-    local complete = GetProfessions ~= nil
-        or (C_SkillLine and C_SkillLine.GetSkillLines) ~= nil
-        or (GetNumSkillLines ~= nil and GetSkillLineInfo ~= nil)
+    local complete = GetProfessions ~= nil or HasSkillLineSource()
 
     if GetProfessions then
         -- MoP+ path: GetProfessions() returns indices for the player's professions
@@ -710,7 +714,9 @@ function Data:ReadCurrentProfessions()
                 end
             end
         else
-            -- GetProfessions exists but returned nothing (Classic Era) — use skill lines
+            -- GetProfessions exists but returned nothing (Classic Era) — use skill lines.
+            -- Without a skill-line source the read is unknown, not "no professions".
+            complete = HasSkillLineSource()
             for skillName, isHeader, skillRank, skillMaxRank in IterSkillLines() do
                 if not isHeader then
                     local canonical = self:GetCanonicalProfName(skillName)

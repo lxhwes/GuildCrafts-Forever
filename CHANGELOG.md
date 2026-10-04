@@ -21,6 +21,7 @@
   - **Forever members keyed by GUID** — Forever characters have a first name and a surname and no realm, so the old `Name-Realm` key never matched the guild roster. Every member would have been marked absent and tombstoned after 7 days. On Forever, GuildCrafts now keys members by GUID and reads names from the roster for display and whispers. Pre-GUID entries for your own character move to the new key automatically.
   - **Tooltip no longer writes the global `_`** — reading the hovered item assigned to the shared global `_`, a taint source on Mainline clients. It no longer touches any global.
   - **No more profession purges from a bad read** — a profession that holds recipes is no longer deleted, or announced as dropped to the guild, just because the client's profession read came back empty or short. Forever has no skill-line fallback, so one empty read used to purge every profession for every guildmate. GuildCrafts now keeps the data, retries the read, and prints a hint; `/gc drop <profession>` is the only way to remove one. Peers ignore removals that don't come from `/gc drop` or predate that profession's stored update. Sync keeps recipes from empty reads unless it carries a later explicit drop.
+  - **`/gc drop` refuses after an empty read** — on Forever, `/gc drop <profession>` could remove a profession the character still knew, and announce it to the guild, if the client's profession list read empty at that moment. It now says it couldn't read your professions and asks you to try again.
 
   ## 2.0.2 — 2026-09-08
 
