@@ -20,6 +20,8 @@ author's permission (`docs/ORIGIN.md`).
 - No file published from this fork may be tagged for another flavor.
 - Gethe/wow-ui-source branch `forever` at pin 9a789c0 (1.60.1.70170) is the API source of
   truth. It wins over docs and training data.
+  Vendored at `/Users/alex/code/legacynext/vendor/wow-ui-source` (sparse: no
+  `Blizzard_ChatFrame`, `Blizzard_Professions*` or guild roster docs; probe those in game).
 - Feature-detect APIs. Never branch on interface number. Never hardcode IDs.
 - SavedVariables booleans may not round-trip on Forever; store 1/0 until proven otherwise.
 - Addon messages are restricted during encounters. Extend `SyncPausePolicy.lua` rather than
@@ -35,7 +37,7 @@ author's permission (`docs/ORIGIN.md`).
 
 | Doc | What it's for |
 |---|---|
-| `spec/forever-plan.md` | Phases to the Nov 4 launch, their gates, the plan-ID → issue index, decisions. Work items are GitHub Issues #4–#39; check both before proposing work |
+| `spec/forever-plan.md` | Phases to the Nov 4 launch, their gates, the plan-ID → issue index, decisions. Work items are GitHub Issues (#4–#45); check both before proposing work |
 | `spec/migration-forever.md` | Dated decisions and in-game evidence |
 | `docs/releasing.md` | The release runbook |
 | `docs/testing.md` | Regression commands, solo and two-client procedures |
@@ -43,7 +45,10 @@ author's permission (`docs/ORIGIN.md`).
 | `docs/user-guide.md` | Player-facing usage and limitations |
 | `docs/ORIGIN.md` | Provenance and the author's permission, quoted verbatim |
 | `spec/fork-review.md` | The 2026-09-28 review that defines F1–F21 and C1–C6; historical, status lives in the issues |
+| `spec/curseforge-audit.md` | The 2026-10-03 audit of upstream player reports that defines F22–F40; evidence at `60c6b32` |
 | `RFC/`, other `spec/*.md`, `ROADMAP.md` | Upstream history, bannered as such |
+
+In markdown table cells, escape `|` as `\|`, even inside backticks.
 
 ---
 
@@ -68,6 +73,8 @@ Versions:
 - PRs are squash-merged into `main`, branch deleted after merge
 - Force-push to feature branches is fine (they're never shared before PR)
 - After a rebase, use `git push --force-with-lease`
+- New plan item: open an issue titled `<ID>: <title>` with the plan-link header, a Findings
+  and a Done-when checklist, the label and phase milestone; then add its row and `[#N]` link to the plan
 
 ### Important
 Never commit, push, create a PR, merge, tag, or publish without explicit instruction from the
@@ -88,12 +95,13 @@ user. A pushed `v*` tag publishes to CurseForge.
 
 A current architecture doc is planned (D1 cut 2 in `spec/forever-plan.md`). Until then:
 
-- **DR** (Designated Router): alphabetically first addon user; answers all
-  `SYNC_REQUEST`s and broadcasts `HEARTBEAT` every 60s
-- **BDR** (Backup DR): second alphabetically; responds at retry=1
+- **DR** (Designated Router): first `addonUsers` key in sort order. On Forever that's the
+  lowest GUID string (server ID, then character ID), not a name. Answers all `SYNC_REQUEST`s
+  and broadcasts `HEARTBEAT` every 60s
+- **BDR** (Backup DR): second in sort order; responds at retry=1
 - `syncRetryCount`: 0 = ask DR, 1 = ask BDR, 2 = evict both and re-elect
-- `currentTerm`: monotone integer incremented on DR promotion; stale messages
-  (term < currentTerm) are silently dropped
+- `currentTerm`: in memory only, reset on reload, raised by any higher-term message. Only
+  `HEARTBEAT` and `SYNC_RESPONSE` are dropped when stale (term < currentTerm)
 - `SyncPausePolicy`: suspends outgoing sync during combat, instances, zone transitions
   (grace periods 6s / 15s / 12s) and active addon restrictions (`C_RestrictedActions`)
 - Chunked transfers: one chunk per second via timer, `SYNC_CHUNK_SIZE = 5`
@@ -169,7 +177,8 @@ commands reach that PC through one secret gist, not through chat.
   (file `gc-forever-probes.md`). It's secret, which means unlisted: anyone with the link can open it.
 - Source of truth: `docs/ingame-commands.md` in this repo. The gist mirrors that file.
   Never edit the gist by hand.
-- Claude's sandbox can't authenticate `gh`, so Alex publishes each update:
+- `gh` and `git push` fail inside the sandbox (keychain blocked). Run them with the sandbox
+  disabled per command, or Alex runs:
   `! gh gist edit 6ccdf7ad7451481d916410b65beff5ce --filename gc-forever-probes.md docs/ingame-commands.md`
 - After an update, Claude confirms the change by fetching the raw gist URL.
 
