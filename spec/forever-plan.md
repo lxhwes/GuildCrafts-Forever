@@ -179,6 +179,8 @@ Anything raid-adjacent waits for Dec 9.
 [Milestone](https://github.com/lxhwes/GuildCrafts-Forever/milestone/6). Feature ideas from
 [`spec/later-backlog.md`](later-backlog.md), which has the privacy rules and the suggested order.
 Nothing here starts before the Oct 28 feature freeze has passed and the launch build is out.
+Implementation specs for N1–N8, with the 2026-10-04 design decisions, are in
+[`spec/later/`](later/README.md).
 
 N: out of game (export, companion, web, Discord). N4's design gates every external service.
 
@@ -239,6 +241,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 | 2026-10-03 | GitHub Issues is the tracker. This file keeps phases, gates and the ID index |
 | 2026-10-03 | H1: get luacheck to zero warnings first, then CI fails on any warning |
 | 2026-10-03 | Later backlog N1–N9, G1–G7 added from `spec/later-backlog.md`; N4 design gates all external services |
+| 2026-10-04 | N1–N8 specs in `spec/later/`. N2 marker tombstone-shaped; protocol `VERSION` 4 with N2 (#34 becomes v5); companion block in a separate `GuildCraftsExport` SavedVariable; external stack on Cloudflare Workers Paid in a new monorepo, multi-tenant with one tenant at launch |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 
 ---
