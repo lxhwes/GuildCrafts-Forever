@@ -141,6 +141,7 @@ function Comms:OnInitialize()
     self.prefixResult          = nil  -- RegisterAddonMessagePrefix return
     self.lastMessageAt         = nil  -- last message from a resolved peer, never our own echo
     self.unresolvedSenderDrops = 0
+    self.sendFailures          = 0
 end
 
 function Comms:OnEnable()
@@ -1395,6 +1396,14 @@ function Comms:SendMessage(msgType, payload, distribution, target, priority)
         toSend = "U" .. serialized  -- "U" prefix = uncompressed
     end
 
+    -- AceComm reports per chunk whether ChatThrottleLib's send succeeded (F34).
+    local function onSent(_, _, _, didSend)
+        if didSend == false then
+            self.sendFailures = (self.sendFailures or 0) + 1
+            GuildCrafts:Debug("Send failed:", msgType, distribution, target or "")
+        end
+    end
+
     -- Send via AceComm (handles chunking automatically)
     if distribution == "WHISPER" and target then
         local whisperTarget = GuildCrafts.Data:GetWhisperTarget(target)
@@ -1402,9 +1411,9 @@ function Comms:SendMessage(msgType, payload, distribution, target, priority)
             GuildCrafts:Debug("SendMessage: no whisper target for", target, "— dropped", msgType)
             return
         end
-        self:SendCommMessage(PREFIX, toSend, distribution, whisperTarget, priority or PRIO_NORMAL)
+        self:SendCommMessage(PREFIX, toSend, distribution, whisperTarget, priority or PRIO_NORMAL, onSent)
     elseif distribution == "GUILD" then
-        self:SendCommMessage(PREFIX, toSend, distribution, nil, priority or PRIO_NORMAL)
+        self:SendCommMessage(PREFIX, toSend, distribution, nil, priority or PRIO_NORMAL, onSent)
     end
 end
 

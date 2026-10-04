@@ -11,6 +11,7 @@
 
   ### Improvements
 
+  - **Scan diagnostics in `/gc report`** — every way a profession scan can stop early now leaves a reason in the debug log: a linked or NPC view, no guild database yet, the window not ready, an empty recipe list, the partial-scan guard. Each finished scan logs how many recipe IDs it read, how many were learned and how many were new. Retries now stop after 10 in a row instead of repeating every second while the window stays empty. Identical consecutive log lines collapse into one with a count. Failed addon-message sends are logged and counted in the report.
   - **Sync pauses under Forever addon restrictions** — outgoing sync also waits while the client reports an Encounter, Challenge Mode, PvP match, Map or Chat restriction. It picks up restrictions already active after a `/reload`. Classic clients are unaffected.
   - **Version shown in `/gc comms`** — the first line now shows the version read from the loaded TOC (`dev` when running from source), so bug reports carry the real build.
   - **Profession list follows the client** — Jewelcrafting and Inscription are hidden whenever the client's own profession skill lines don't include them, even if it reports a later expansion level. The expansion-level check still applies when that list isn't available.

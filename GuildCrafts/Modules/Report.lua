@@ -66,14 +66,25 @@ function Report:OnInitialize()
 end
 
 --- Append one line built like print(): arguments tostring'd and space-joined.
+--- A line identical to the previous one rewrites it with a count, so event
+--- storms (TRADE_SKILL_LIST_UPDATE rescans) can't evict the useful history.
 function Report:Append(...)
     if not self._log then self._log = NewLog() end
+    local log = self._log
     local parts = {}
     for i = 1, select("#", ...) do
         parts[i] = tostring((select(i, ...)))
     end
-    local line = date("%H:%M:%S") .. " " .. table.concat(parts, " ")
-    AddLine(self._log, line:sub(1, Report.LINE_MAX))
+    local text = table.concat(parts, " ")
+    local stamp = date("%H:%M:%S") .. " "
+    if text == log.lastText and (log.repeats or 0) > 0 then
+        log.repeats = log.repeats + 1
+        local previous = (log.next - 2) % Report.LOG_SIZE + 1
+        log.lines[previous] = (stamp .. text):sub(1, Report.LINE_MAX - 8) .. " (x" .. log.repeats .. ")"
+        return
+    end
+    log.lastText, log.repeats = text, 1
+    AddLine(log, (stamp .. text):sub(1, Report.LINE_MAX))
 end
 
 --- Logged lines, oldest first.
@@ -183,6 +194,7 @@ local function AddSync(out)
         or tostring(result) .. " (" .. EnumName(Enum and Enum.RegisterAddonMessagePrefixResult, result) .. ")")
     out[#out + 1] = "Last message received: " .. Age(Comms.lastMessageAt)
     out[#out + 1] = "Unresolved-sender drops: " .. tostring(Comms.unresolvedSenderDrops)
+    out[#out + 1] = "Send failures: " .. tostring(Comms.sendFailures)
 end
 
 local function AddPause(out)
