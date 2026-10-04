@@ -16,8 +16,11 @@ GetProfessions = function()
     if known.error then error("profession API unavailable") end
     return unpack(known.indices or {}, 1, 5)
 end
-GetNumSkillLines = function() return #skillLines end
-GetSkillLineInfo = function(index) return skillLines[index], false, nil, 1, nil, nil, 75 end
+local function classicSkillLines()
+    GetNumSkillLines = function() return #skillLines end
+    GetSkillLineInfo = function(index) return skillLines[index], false, nil, 1, nil, nil, 75 end
+end
+classicSkillLines()
 GetProfessionInfo = function(index)
     local prof = known[index]
     if prof then return prof, nil, 1, 75 end
@@ -67,6 +70,7 @@ local function reset()
     now, known, db, messages, sent = 1000, {}, {}, {}, {}
     playerKey = "Owner-Realm"
     skillLines = {}
+    classicSkillLines()
     Data._currentProfs, Data._dropHinted, Data._detectRetries = nil, nil, nil
     Data.db.global = {}
     C_TradeSkillUI = nil
@@ -304,6 +308,31 @@ test("live drop validation uses Classic skill-line fallback", function()
     skillLines = { "Alchemy" }
     Data:DropProfession("alchemy")
     assert(db[playerKey].professions.Alchemy)
+end)
+
+test("drop refuses after an empty Forever read with no skill-line fallback", function()
+    -- Forever 1.60.1: no C_SkillLine, GetNumSkillLines or GetSkillLineInfo (SKL probe, 2026-10-02).
+    -- Data.lua caches those globals at load, so load a copy without them.
+    GetNumSkillLines, GetSkillLineInfo = nil, nil
+    local classicData = GuildCrafts.Data
+    dofile("GuildCrafts/Modules/Data.lua")
+    local foreverData = GuildCrafts.Data
+    GuildCrafts.Data = classicData
+    foreverData.GetGuildDB, foreverData.GetPlayerKey = Data.GetGuildDB, Data.GetPlayerKey
+    foreverData.ScheduleTimer, foreverData.db = Data.ScheduleTimer, Data.db
+    db[playerKey] = entry({ Alchemy = profession(3) }, 800)
+    foreverData:DropProfession("alchemy")
+    assert(db[playerKey].professions.Alchemy, "empty read deleted a known profession")
+    assert(not db[playerKey].dropped, "empty read recorded a drop")
+    assert(#sent == 0, "empty read broadcast a removal")
+    assert(messages[1]:find("Could not read", 1, true))
+end)
+
+test("Classic Era empty GetProfessions still validates a drop from skill lines", function()
+    db[playerKey] = entry({ Alchemy = profession(3) }, 800)
+    skillLines = { "Herbalism" }
+    Data:DropProfession("alchemy")
+    assert(not db[playerKey].professions.Alchemy, "skill-line read blocked a valid drop")
 end)
 
 test("profession API errors do not delete recipes", function()
