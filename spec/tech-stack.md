@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](forever-plan.md). Current architecture reference is planned (D1 cut 2); read this with [`spec/migration-forever.md`](migration-forever.md).
+
 # GuildCrafts — Tech Stack
 
 > **Historical document.** This was the original tech stack reference written during development. The addon is now complete and in maintenance mode. Some entries (e.g. `CraftRequest.lua` and the craft request UI files) describe components that were later removed. The actual codebase may differ from what is described here.

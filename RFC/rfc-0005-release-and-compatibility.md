@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](../spec/forever-plan.md). The current release procedure is [`docs/releasing.md`](../docs/releasing.md).
+
 # GuildCrafts Protocol — RFC 0005
 
 **Status:** Informational  
@@ -12,7 +14,7 @@
 3. [Interface / TOC Versioning](#3-interface--toc-versioning)
 4. [Compatibility Layers](#4-compatibility-layers)
    - 4.1 [Tooltip Pipeline (2.5.6 / Classic Era 1.15.9)](#41-tooltip-pipeline-256--classic-era-1159)
-   - 4.2 [TradeSkill API (WotLK modernisation)](#42-tradeskill-api-wotlk-modernisation)
+   - 4.2 [TradeSkill API (multi-expansion compatibility)](#42-tradeskill-api-multi-expansion-compatibility)
 5. [Git Workflow](#5-git-workflow)
 6. [Branch Strategy](#6-branch-strategy)
 7. [Pull Request & Merge Process](#7-pull-request--merge-process)

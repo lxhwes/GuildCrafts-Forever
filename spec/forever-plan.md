@@ -5,13 +5,16 @@ merges Alex's beta plan with:
 - every item still open in `spec/migration-forever.md`;
 - the 2026-09-28 fork review (finding IDs F1–F21 and C1–C6, indexed at the end);
 - the legacynext reuse review;
-- the open items from the 2026-10-02/03 sessions.
+- the open items from the 2026-10-02/03 sessions;
+- Alex's documentation review (`spec/documentation-refresh-plan.md`, kept local), as D1.
 
 `spec/migration-forever.md` is the record of what was decided and verified. This file is what's
 left to do. When Phase 0 creates GitHub Issues, each item here becomes one issue and this file
 keeps only the phase structure.
 
-Beta ends **Oct 21**. Launch **Nov 4**. Raids **Dec 9**.
+Planning targets: beta ends **Oct 21**, launch **Nov 4**, raids **Dec 9**. This plan cites no
+source for these dates. Confirm them against Blizzard's announcements before anything depends on
+them.
 
 Goal, in order: get the codebase into the best shape it can be, then put it in front of the
 guild. Nothing goes to guildmates until Phase 2's exit gate passes.
@@ -20,25 +23,32 @@ guild. Nothing goes to guildmates until Phase 2's exit gate passes.
 
 ## Phase 0 — Tracking (Oct 3–4, an evening)
 
-Work is not tracked anywhere authoritative:
+Work is not tracked anywhere authoritative yet:
 
+- GitHub Issues is enabled on the fork, and it has no issues. Checked on 2026-10-03 with
+  `curl -s https://api.github.com/repos/lxhwes/GuildCrafts-Forever`, which returns
+  `"has_issues": true`. The only entries under `/issues` are PRs #1 and #2.
 - `ROADMAP.md` is upstream's and points at **upstream's** issue tracker.
 - `spec/migration-forever.md` mixed finished tasks, findings and open questions. The open
   questions moved here on 2026-10-03, so it's now a record only.
 - `spec/fork-review.md` is a local, uncommitted working note. Every finding it raised that's
   still open is defined in the index at the end of this file, so committed docs no longer
   depend on it.
+- `plan.md`, the first draft of this plan, is also local. Its H3 and H4 were dropped by mistake
+  during consolidation and were restored here on 2026-10-03.
 
 Do:
 
-1. **GitHub Issues on the fork is the tracker.** One issue per item in this plan. Labels:
-   `blocker`, `hardening`, `testing`, `post-launch`, `needs-ingame`. A milestone per phase.
+1. **GitHub Issues on the fork is the tracker.** Issues is already enabled, so this step is
+   creating them. One issue per item in this plan. Labels: `blocker`, `hardening`, `testing`,
+   `post-launch`, `needs-ingame`. A milestone per phase.
 2. **Rewrite `ROADMAP.md`** for the fork: a short Forever section on top, upstream's history
-   kept below under "Upstream (dkruenbo/GuildCrafts)".
+   kept below under "Upstream (dkruenbo/GuildCrafts)". This moved to D1 cut 2. Until then,
+   `ROADMAP.md` carries a history banner that points here.
 3. **Decide what happens to the local working notes.** Either commit `spec/fork-review.md` as
    a dated historical review, or keep it local. The same goes for
-   `spec/legacynext-reuse-plan.md`. Both are optional now that this plan carries their open
-   items.
+   `spec/legacynext-reuse-plan.md`, `spec/documentation-refresh-plan.md` and `plan.md`. All are
+   optional now that this plan carries their open items.
 
 Why first: guild testing generates reports. Without a tracker, they land in Discord and vanish.
 
@@ -46,7 +56,8 @@ Why first: guild testing generates reports. Without a tracker, they land in Disc
 
 ## Phase 1 — Hardening (Oct 4–10)
 
-Each item: what, why, how, done-when. Ordered by risk within each group.
+Each item: what, why, how, done-when. Items are listed by ID. Blockers are tagged `blocker` and
+go first regardless of position.
 
 ### Data integrity
 
@@ -59,8 +70,9 @@ Each item: what, why, how, done-when. Ordered by risk within each group.
   - `lua5.1 tools/test-forever-identity.lua`;
   - `lua5.1 tools/test-profession-gate.lua`.
 
-  Pin action SHAs as `release.yml` does. Lint is at 51 warnings (48 undefined globals plus F10
-  and two others). Either get it to zero first, or fail only on new warnings.
+  Pin actions to commit SHAs (`release.yml` pins only the packager; see H18). Lint is at 51
+  warnings (48 undefined globals plus F10 and two others). Either get it to zero first, or fail
+  only on new warnings.
 - **Done when:** a failing test fails the PR, and `main` is protected on it.
 
 #### H2. Server time for sync revisions — `blocker`
@@ -76,6 +88,28 @@ Each item: what, why, how, done-when. Ordered by risk within each group.
     changelog.
 - **Done when:** the harness has a clock-skew case — peer A is 20 minutes fast and drops, peer B
   relearns — and the relearn wins.
+
+#### H3. Persist GUID → name — `hardening`, unverified
+- **Status:** a draft finding from `plan.md`, not yet reproduced in game or in the harness.
+  Reproduce it first. If it doesn't reproduce, close it as rejected and record the evidence.
+- **Why:** `ForeverIdentity` resolves names from `GetGuildRosterInfo`, which returns offline
+  members only when the roster is set to show them. Nothing sets it. Offline members may render
+  as raw GUIDs or drop out of lists.
+- **How:** store the last known display name on the member entry, and refresh it whenever the
+  roster resolves. Don't toggle the global show-offline setting. That would change the player's
+  own roster UI.
+- **Done when:** a member who has been offline since your login shows by name.
+
+#### H4. Cold-start sender resolution — `hardening`, unverified
+- **Status:** a draft finding from `plan.md`, not yet reproduced in game or in the harness.
+  Reproduce it first. If it doesn't reproduce, close it as rejected and record the evidence.
+- **Why:** roster data is often empty right after login, and misses only retry after a 5-second
+  floor (`ROSTER_RESCAN_INTERVAL` in `ForeverIdentity.lua`). A sync message arriving in that
+  window may fail to resolve its sender.
+- **How:** queue unresolved messages and drain the queue on `GUILD_ROSTER_UPDATE` instead of
+  relying on the interval.
+- **Done when:** a harness case where a message arrives before the roster is populated resolves
+  once the roster event fires.
 
 #### H9. `/gc drop` after an empty read — `blocker`
 - **Why:** `Data:ReadCurrentProfessions` reports an empty `GetProfessions()` as a complete read
@@ -106,7 +140,7 @@ Each item: what, why, how, done-when. Ordered by risk within each group.
 - **Done when:** a harness case with empty local SavedVariables shows recipes back after sync.
 
 #### H12. Sync robustness — `hardening`
-Validated by the two-client checklist (Phase 2) and wave 1.
+Validated by the two-client checklist (`docs/testing.md`, run in Phase 2) and wave 1.
 - **F8:** a DR that sees a higher term stops heartbeating but keeps `myRole = "DR"`, so a
   re-elected DR stays silent (`Comms.lua` term adoption and the `RecomputeElection` role-change
   branch).
@@ -114,11 +148,14 @@ Validated by the two-client checklist (Phase 2) and wave 1.
   evicts the DR and BDR guild-wide.
 - **BDR never evicted:** when the BDR logs out, the DR keeps it in `addonUsers`. Only the DR is
   ever evicted (`CheckDRAlive`), and roster eviction was removed (`OnGuildRosterUpdate`).
-  Two-client checklist step D2.
+  Two-client checklist step F2.
 - **Paused deltas are dropped, not queued:** a recipe delta suppressed by SyncPausePolicy is
   never resent. The peer only catches up at its next login sync (two-client step R8).
 - **F7:** RESUME duplicates transfers. Large chunks drain at about 800 B/s, so RESUME fires after
   4 s and re-queues chunks that are still in flight.
+- **A returning DR may get no sync (from reading the code, unverified):** a client that still
+  lists a returning peer doesn't answer its HELLO, and the DR never sends a sync request of its
+  own. `docs/testing.md` works around it with a 4-minute offline gap. Reproduce before fixing.
 
 #### H13. Favorites write booleans to SavedVariables — `hardening`
 - **Why:** `Modules/Favorites.lua` stores `= true`. The project rule is 1/0 until a boolean
@@ -187,6 +224,9 @@ Validated by the two-client checklist (Phase 2) and wave 1.
   member has recipes.
 - **C3:** the specialisation table is TBC's. Keep the vanilla ones if their spell IDs carry
   over; drop the rest.
+- **Empty-search copy:** a search with no hits says "Nobody in the guild knows '<query>'"
+  (`UI/MainFrame.lua:1233`). The database only covers addon users who have scanned, so say that
+  instead.
 
 ### Restrictions and lifecycle
 
@@ -194,6 +234,18 @@ Validated by the two-client checklist (Phase 2) and wave 1.
 - **Why:** `ReloadUI()` is reported protected on Forever. A reset that errors leaves the user
   unsure whether their data was cleared.
 - **How:** probe (`needs-ingame`). If protected, reset the data and tell the user to `/reload`.
+- **Also:** `/gc reset` clears all of `GuildCraftsDB`, which includes the minimap position and the
+  Online/Tooltip settings, not only recipes. Either keep settings or say so in the reset message.
+
+#### H18. Release workflow guards — `hardening`, before the first publish
+Found while writing `docs/releasing.md`:
+- the manual-dispatch publish guard accepts any tag on HEAD, not only `v*`, and a branch whose
+  commit carries a tag passes too;
+- the publish step's checks run after the upload, so they report a bad upload but can't stop it;
+- with no `CF_API_KEY`, the CurseForge upload is skipped but the GitHub release is still created;
+- `actions/checkout` and `actions/upload-artifact` are `@v4`, not SHA-pinned.
+- **Done when:** a dispatch on a non-`v*` tag refuses to publish, and a missing token fails the
+  job before any release is created.
 
 #### H8. Close the remaining open questions — `needs-ingame`
 - `RE` probe at a dungeon boss pull: does `ADDON_RESTRICTION_STATE_CHANGED` fire? The
@@ -204,31 +256,62 @@ Validated by the two-client checklist (Phase 2) and wave 1.
   - keep `!gc` silent under any restriction;
   - add a grace period after a restriction lifts.
 
+### Documentation
+
+#### D1. Documentation refresh
+- **Why:** the repo's docs still describe the Classic addon. A guildmate or contributor has no
+  current page for install, testing or release. The scope comes from Alex's review in
+  `spec/documentation-refresh-plan.md`, which stays local.
+- **Cut 1 (now, before the first tester build):**
+  - rewrite `README.md` for the Forever fork;
+  - write `docs/user-guide.md`;
+  - rewrite `CONTRIBUTING.md`, with a bug-report section;
+  - write `docs/releasing.md`, the one release runbook;
+  - write `docs/testing.md`, with the solo and two-client checklists moved out of
+    `spec/migration-forever.md`;
+  - trim `CLAUDE.md`;
+  - fix this plan (H3 and H4 restored, Issues status, date targets, protocol v4 naming);
+  - add history banners to the inherited RFCs, specs, `ROADMAP.md` and
+    `CURSEFORGE_DESCRIPTION.md`;
+  - mark the fork boundary in `CHANGELOG.md`.
+- **Cut 2 (after the Oct 28 feature freeze):**
+  - write `docs/architecture.md` from source, after Phase 1's sync changes land;
+  - rewrite `ROADMAP.md`;
+  - propose a shared CurseForge description. This needs the upstream author's agreement;
+  - archive moves for the inherited docs, only if still wanted.
+- **Status:** cut 1 written 2026-10-03 on `docs/refresh-cut1`, not yet merged.
+- **Done when:** cut 1 is merged before Phase 2, and cut 2 is merged before launch.
+
 **Phase 1 exit gate:**
 - CI green on `main`.
 - Every `blocker` (H1, H2, H5, H9, H10, H14) merged.
 - The rest either merged or deferred in an issue with a reason.
 - H8 answered or explicitly deferred.
+- D1 cut 1 merged.
 
 ---
 
 ## Phase 2 — First tester build (Oct 10–11)
 
+These are the gates. [`docs/releasing.md`](../docs/releasing.md) has the commands and the
+order for each one.
+
 Before tagging:
 - dkruenbo has added your CurseForge account to project 1469206 with upload rights.
-- A CurseForge API token is stored as `CF_API_KEY`, set from your own terminal:
-  `gh secret set CF_API_KEY --repo lxhwes/GuildCrafts-Forever`.
-- `CHANGELOG.md` is ready for `manual-changelog`. Every line is indented two spaces, and the top
-  section is `## Unreleased`. Give it a version heading.
+- A CurseForge API token is stored as the `CF_API_KEY` repository secret.
+- `CHANGELOG.md` has a version heading in place of `## Unreleased`, in the format the packager's
+  `manual-changelog` expects.
+- A no-publish dry run of `release.yml` passed on the commit you're about to tag, and you
+  inspected its artifact. The first dry run passed on 2026-10-03 (run `37093088953`).
+- H18's guards are in, so a missing token or a stray tag can't publish half a release.
 
 Then:
-1. Tag `v2.1.0-forever-beta.1` (confirm the convention with Lektor if he answered).
-2. Dry-run `release.yml` via `workflow_dispatch` with `publish: false`. Download the artifact,
-   inspect it. The first dry run passed on 2026-10-03 (run `37093088953`).
-3. Publish as release type **beta**, not release. Check on CurseForge that the file carries
-   exactly one game version tag, and that nothing changed for the other five flavors.
-4. Run the two-client checklist (`spec/migration-forever.md`) with **one** guildmate before
-   anyone else installs it. If they're on a different server prefix (`Player-4613-` vs
+1. Tag `v2.1.0-forever-beta.1` (confirm the convention with Lektor if he answered). Pushing a
+   `v*` tag publishes.
+2. Check the published file on CurseForge. It's release type **beta**, not release. It carries
+   exactly one game version tag, and nothing changed for the other five flavors.
+3. Run the two-client checklist ([`docs/testing.md`](../docs/testing.md)) with **one** guildmate
+   before anyone else installs it. If they're on a different server prefix (`Player-4613-` vs
    `Player-4619-`), that also answers how a cross-server sender name looks and whether a whisper
    reaches them.
 
@@ -265,11 +348,13 @@ behaviour, not data. Don't build anything that migrates beta data.
 ## Phase 4 — Launch (Oct 21 – Nov 4)
 
 1. Fix whatever waves 2–3 surfaced. Freeze features on **Oct 28**.
-2. When the launch build appears on the `forever` branch, re-run the solo checklist on it and
-   bump the pin in the docs.
-3. Tag `v2.1.0-forever`, publish as **release** on Nov 4.
-4. Send Lektor the link. He offered to share it with his guild.
-5. Post in the Forever addon communities once it's live, not before.
+2. After the freeze, do D1 cut 2.
+3. When the launch build appears on the `forever` branch, re-run the solo checklist
+   (`docs/testing.md`) on it and bump the pin in the docs.
+4. Tag `v2.1.0-forever`, publish as **release** on the launch date (target Nov 4), following
+   `docs/releasing.md`.
+5. Send Lektor the link. He offered to share it with his guild.
+6. Post in the Forever addon communities once it's live, not before.
 
 ---
 
@@ -297,7 +382,9 @@ Decided on 2026-10-02 from the legacynext reuse review:
   - C6: recipe sources and "known by" on blueprints need a static map.
 - **C4:** cooldowns. The modern scan reads none; `C_Spell.GetSpellCooldown`, guarded by
   `issecretvalue`.
-- **Wire format v3:**
+- **Compact sync encoding (protocol v4).** Protocol `VERSION` and `DATA_FORMAT_VERSION` are
+  already 3 since `f0522c4` (profession drop history), so this change would ship as version 4.
+  It was called "wire format v3" before that bump.
   - recipe-ID sets instead of recipe tables (591 B vs 3,554 B for 120 recipes);
   - chunks of about 2 KB, sized by bytes rather than members;
   - a version-vector digest in HELLO/HEARTBEAT;
@@ -313,8 +400,7 @@ Decided on 2026-10-02 from the legacynext reuse review:
   - one scan pipeline;
   - an event bus;
   - remove AceGUI (7,109 lines, never used);
-  - update LibDBIcon for the compartment;
-  - mark the RFCs that describe upstream-only behaviour.
+  - update LibDBIcon for the compartment.
 - **Ace3 upstream Forever fixes** newer than r1403: AceDB `1e98fc0`, `5e2e0d3` and `afabc91`.
   The last removes the realm from `charKey`, which may change profile keys, so evaluate before
   taking it.
@@ -351,6 +437,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 | 2026-10-02 | Jewelcrafting and Inscription are gated on the client's skill lines |
 | 2026-10-02 | Own vendor checkout; copy legacynext's skills rather than symlinking |
 | 2026-10-03 | Plain Lua 5.1 regression scripts in `tools/test-*.lua`, not busted |
+| 2026-10-03 | Documentation refresh in two cuts (D1). Inherited docs get history banners in place rather than moving to an archive |
 | Open | Build on Blizzard's guild recipe API (post-launch) |
 
 ---
@@ -378,7 +465,7 @@ Status as of `8f0dc69`.
 | F15 | Fuzzy search keeps `y` | Post-launch |
 | F16 | `IsSpellKnown` checked before `C_SpellBook` | Open, H15 |
 | F17 | Identity split on Forever | Fixed (`9faf497`) |
-| F18 | ChatThrottleLib v31 taint | Fixed (`a1c0554`); in-game check is Q6 |
+| F18 | ChatThrottleLib v31 taint | Library updated to v32 (`a1c0554`); not yet checked in game, Q6 |
 | F19 | Empty read purges every profession | Fixed (`fd788e6`, `f0522c4`); remaining hole is H9 |
 | F20 | Whisper button breaks two-word names | Open, H14 |
 | F21 | Empty profession name stops the scan | Open, H15 |

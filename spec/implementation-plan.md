@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](forever-plan.md). Planned work now lives in [`spec/forever-plan.md`](forever-plan.md).
+
 # GuildCrafts — Implementation Plan
 
 > **Historical document.** This was the phased implementation plan written before development began. The addon is now complete and in maintenance mode. All phases were executed, though some details changed along the way — notably Phase 6 (Craft Request System) was built and later removed in favour of the `[W]` whisper button workflow.

@@ -1,16 +1,21 @@
-# GuildCrafts — WoW Forever Migration Guide
+# GuildCrafts — WoW Forever migration record
 
 > Target: WoW Forever (Interface `16001`, client `1.60.1`, Mainline API)
-> Current: Forever loads through `GuildCrafts_Camelot.toc` on `feature/forever-support`
+> Current: Forever loads through `GuildCrafts_Camelot.toc`. `feature/forever-support` was merged
+> to `main` by PR #1 (merge commit `8f0dc69`, 2026-10-02 23:06 -04:00)
 > API source of truth: Gethe/wow-ui-source branch `forever`, read at legacynext's pin
 > `9a789c0` (`1.60.1.70170`). Citations below are against that pin unless marked "in game".
 
 Forever runs the retail (Mainline) API under a Classic-shaped interface number. The Forever
 port (`c0a7e11`) already covers the scan and lookup fallbacks (`C_Item`, `C_SpellBook`,
-`C_TradeSkillUI.GetRecipeSchematic`). This guide covers what stood between that port and a
+`C_TradeSkillUI.GetRecipeSchematic`). This record covers what stood between that port and a
 clean load: which TOC the client reads, profession pruning, and the expansion filter with no
 recipe data loaded. Only the Forever flavor is maintained here; the other five TOCs and
 `Data/Data_*.lua` stay as upstream shipped them.
+
+This file is the dated record of decisions and evidence. Planned work and open questions are
+in `spec/forever-plan.md`. Test procedures are in `docs/testing.md`, and the release procedure
+is in `docs/releasing.md`.
 
 Rules that apply to every task: feature-detect APIs, never branch on interface number, never
 hardcode IDs, and store `1`/`0` rather than booleans in SavedVariables until a boolean
@@ -28,6 +33,7 @@ round-trip is proven on Forever.
 | SyncPausePolicy — Forever addon restrictions | Extend existing module | Implemented; API verified in game, encounter event not yet |
 | Display version | None | `@project-version@`, packager-filled; `DISPLAY_VERSION` reads it |
 | Profession drop/relearn sync (PR #1 review) | Retain drop history; live drop validation; per-profession revisions | Implemented; 28 Lua 5.1 regression checks pass; in-game verification pending |
+| Forever-only packaging | Release workflow (`8b88277`) | Implemented; GitHub dry run passed 2026-10-03 (run `37093088953`); no CurseForge upload yet |
 
 ---
 
@@ -51,9 +57,9 @@ type is `camelot` (for example `Blizzard_AchievementUI.toc:8`,
 `[Game]\Blizzard_AchievementUI.lua [AllowLoadGameType camelot]`). No vendored TOC uses a
 `_Forever` or `_Camelot` filename suffix, so the suffix had to be settled in game.
 
-**Packaging caveat (out of scope here):** the BigWigs packager reads every TOC in the folder,
-so a multi-TOC package would also tag the Classic flavors. A Forever-only package is needed
-before any CurseForge upload.
+**Packaging:** the BigWigs packager reads every TOC in the folder, so a multi-TOC package would
+also tag the Classic flavors. The Forever-only release workflow (`8b88277`) solves this; see
+"Packaging" below and `docs/releasing.md`.
 
 ---
 
@@ -91,7 +97,7 @@ It is not part of the hand-bumped version checklist in `CLAUDE.md`.
 
 ## Task 2 — Profession pruning
 
-### What was expected
+### Earlier hypothesis (disproved in game)
 
 `Data.lua:2054` reads:
 
@@ -120,7 +126,8 @@ Skinning and Cooking.
 
 ### Change
 
-**None.** The check reads a value the client reports; it isn't keyed on the interface number.
+**None** to the expansion-level check. It reads a value the client reports; it isn't keyed on
+the interface number. A skill-line gate was added later (`c16b09f`); see "Risk and gate".
 
 ### Risk and gate
 
@@ -132,11 +139,12 @@ would come back as tracked professions that don't exist.
   (`MainFrame.lua:755-790`), so two empty `Jewelcrafting (0)` and `Inscription (0)` rows would
   appear. No stored data changes, because no character can learn either profession.
 - **Detection.** Immediate. The rows show on the first `/gc` after the client change.
-- **Why not gate it now.** A Forever-specific gate needs one of two things. One is a hardcoded
-  skill-line ID, which the project rules forbid. The other is the list from
-  `C_TradeSkillUI.GetAllProfessionTradeSkillLines()` (`TradeSkillUIDocumentation.lua:121`),
-  which is unverified on Forever. If that list holds only the professions the client
-  actually has, pruning can be built from it with no IDs and no expansion-level check.
+- **Earlier reasoning, before the `PSL` result.** A Forever-specific gate needs one of two
+  things. One is a hardcoded skill-line ID, which the project rules forbid. The other is the
+  list from `C_TradeSkillUI.GetAllProfessionTradeSkillLines()`
+  (`TradeSkillUIDocumentation.lua:121`), which was unverified on Forever at the time. If that
+  list holds only the professions the client actually has, pruning can be built from it with no
+  IDs and no expansion-level check.
 - **`PSL` result (in game, 2026-10-02).** The list holds Alchemy, Blacksmithing, Enchanting,
   Engineering, Herbalism, Leatherworking, Mining, Skinning and Tailoring, plus
   `Test Profession [DNT]`. Each appears twice: as a parent line (171, 164, 333, 202, 182, 165,
@@ -144,10 +152,10 @@ would come back as tracked professions that don't exist.
   **Jewelcrafting and Inscription are absent**, so the list can gate them. Cooking, First Aid
   and Fishing are also absent: secondary skills aren't in this list, so a gate may only use it
   for primary professions.
-- **Gate (implemented).** `Data:ApplyClientProfessionGate`, run from `Data:OnEnable`, drops
-  Jewelcrafting and Inscription when the client's skill-line list is non-empty and names
-  neither. It only narrows the expansion-level result. If the list is missing or empty, the
-  expansion-level check stands.
+- **Gate (implemented in `c16b09f`).** `Data:ApplyClientProfessionGate`, run from
+  `Data:OnEnable`, drops Jewelcrafting and Inscription when the client's skill-line list is
+  non-empty and names neither. It only narrows the expansion-level result. If the list is
+  missing or empty, the expansion-level check stands.
 
 ---
 
@@ -182,8 +190,9 @@ out of scope (C5 in `spec/forever-plan.md`).
 ## Task 4 — SyncPausePolicy: Forever addon restrictions
 
 Forever blocks addon messages during some activities. Approved 2026-10-02 and implemented in
-`Modules/SyncPausePolicy.lua`. `RA` and `RS` confirmed the API in game; whether the event
-fires at a boss pull waits on `RE` (`docs/ingame-commands.md`).
+`Modules/SyncPausePolicy.lua` (`71526af`). `RA` and `RS` confirmed the API in game. Whether the
+event fires at a boss pull is still open: Q2 in `spec/forever-plan.md`, answered by the `RE`
+probe in `docs/testing.md` section R.
 
 ### Documented signals (source only, never run in game)
 
@@ -196,7 +205,7 @@ fires at a boss pull waits on `RE` (`docs/ingame-commands.md`).
 | `C_ChatInfo.InChatMessagingLockdown()` | `ChatInfoDocumentation.lua:293` |
 | `SendAddonMessage` result 11 = `AddOnMessageLockdown` | `ChatConstantsDocumentation.lua:162` |
 
-### Shape
+### Shape (as approved and implemented in `71526af`)
 
 Extend `Modules/SyncPausePolicy.lua`; don't add a second gate.
 
@@ -230,7 +239,7 @@ restriction, and a grace period after a restriction lifts. These wait on the `RE
 
 ---
 
-## Forever-specific edge cases (known, not in this guide's scope)
+## Forever-specific edge cases (known, not in this record's scope)
 
 These come from the 2026-09-28 fork review and legacynext's in-game notes. Finding IDs (F#, C#)
 are indexed, with current status, in `spec/forever-plan.md`. They affect behaviour
@@ -256,13 +265,13 @@ after load, not whether the addon loads.
     for display and whispers. Classic flavors keep `Name-Realm`, using the defaults in
     `Data:GetMemberName`, `Data:GetWhisperTarget` and `Data:RosterMemberKey`.
   - Still unverified: the sender name for a guildmate on another server (GUID prefix 4613 vs
-    4619), and whether an addon whisper to `First Surname` reaches them. The two-client
-    checklist covers both.
+    4619), and whether an addon whisper to `First Surname` reaches them. Tracked as Q5 in
+    `spec/forever-plan.md`; `docs/testing.md` section W tests it.
 - **ChatThrottleLib v31 taint (F18). Fixed:** the bundled copy is v32 from Ace3
   `Release-r1403` (sha256 `3491b6c9…6dde8`). Its hooks return early when text or destination is a
   secret value (`ChatThrottleLib.lua:282`, `:292`). It's otherwise identical to v31, and
   AceComm-3.0 (MINOR 14) is unaffected. The unused standalone v29 copy is removed. Whether this
-  clears the taint in game is unverified.
+  clears the taint in game is unverified (Q6 in `spec/forever-plan.md`).
 - **Empty profession read purges data (F19), fallback confirmed absent in game 2026-10-02.**
   `DetectProfessions` runs 5s after login or `/reload`, not at logout. `SKL` printed
   `false false false true`: `C_SkillLine`, global `GetNumSkillLines` and global
@@ -299,21 +308,19 @@ after load, not whether the addon loads.
 
 ---
 
-## Recommended test checklist
+## Test results
 
-All on a Forever character, with the full TOC set installed:
+The solo and two-client procedures moved to `docs/testing.md` on 2026-10-03. The results below
+stay here.
 
-1. AddOns list shows GuildCrafts, not flagged out of date
-2. `/run` TOC probe prints `16001 true … true true`
-3. No Lua errors at login (BugSack, or the default error frame)
-4. `/gc` opens the main window
-5. No expansion filter buttons; the search box reaches the scope dropdown
-6. The profession list has no Jewelcrafting or Inscription
-7. While in a guild, open and close a profession window, then `/gc dump`: it prints your key
-   and a non-zero recipe count for that profession (scan verified 2026-10-02: Alchemy 5 of 197)
-8. In `/gc`, that profession → your name lists the same recipes (passed 2026-10-02)
-9. `/gc comms` first line reads `--- Comms Status (GuildCrafts dev) ---` from an unpackaged
-   copy, or the packaged version from a CurseForge build (passed 2026-10-03, `dev`)
+### Solo checklist
+
+Run on a Forever character with the full TOC set installed from a source checkout.
+
+- Items 3–8 passed on 2026-10-02. Item 7's scan: Alchemy 5 of 197. Item 8 passed the same day.
+- Item 9 passed on 2026-10-03: `/gc comms` read `Comms Status (GuildCrafts dev)`, the expected
+  value for an unpackaged copy.
+- Items 1 and 2 are the TOC experiments in Task 1.
 
 **Smoke test on merged `main` (`8f0dc69`), 2026-10-03, full TOC set, after a full relog:**
 - No Lua errors at login.
@@ -328,95 +335,7 @@ All on a Forever character, with the full TOC set installed:
 
 ### Two-client checklist
 
-The solo list above never runs the DR/BDR election or the sync protocol. This section needs
-you (A) and one guildmate (B), both on this branch's build, both in the same guild.
-
-GuildCrafts prefixes its chat lines with `GuildCrafts:`; `[debug]` lines only print after
-`/gc debug`. Debug mode resets at every login and `/reload`, so turn it on again each time.
-Commands marked by tag (`RA`, `SP`, `RE`) are in `docs/ingame-commands.md`.
-
-**Who should be DR.** Election picks the lowest member key by plain byte order
-(`Comms.lua:291-301`). On Forever the key is the GUID (`Player-4619-…`). Get each key from the
-first line of `/gc dump` (`Local player: …`) and work out the expected DR before you start.
-Compare character by character after `Player-`. Call the lower key LOW and the other HIGH.
-`/gc comms` lists each addon user as `<name> <GUID>`.
-
-#### Setup
-
-| Step | Who | Do | Expect |
-|---|---|---|---|
-| S1 | both | `/gc dump` | `Local player: <key>`. Note both keys; decide LOW and HIGH |
-| S2 | both | `/gc comms` | First line `--- Comms Status (GuildCrafts dev) ---` |
-| S3 | both | `RA` | `RA true true true true false`. If not, skip section R |
-
-#### E — Election
-
-| Step | Who | Do | Expect |
-|---|---|---|---|
-| E1 | A only | Log in alone. Wait 30s. `/gc comms` | `My role: DR`, `DR: <A>`, `BDR: none`, `Total addon users: 1` |
-| E2 | A | `/gc debug` | `Debug mode: ON` |
-| E3 | B | Log in. Wait 30s | On A: `[debug] HELLO from <B> v3`, then `[debug] Sent HELLO reply to <B>` |
-| E4 | both | `/gc comms` | Both print the same `DR: <LOW>` and `BDR: <HIGH>`. LOW shows `My role: DR`, HIGH `My role: BDR`. `Total addon users: 2`, both keys listed |
-| E5 | LOW | Wait for HIGH's sync (about 15s after E3) | With debug on, LOW prints `[debug] Handling SYNC_REQUEST from <HIGH> (role: DR )`, then either `Sync with <HIGH> — already converged.` or `Sending SYNC_PULL to <HIGH> …` |
-
-**Fail:** both clients say `My role: DR` (split election), either shows `Total addon users: 1`
-after 60s, or the two disagree on `DR:`.
-
-#### D — One client drops
-
-| Step | Who | Do | Expect |
-|---|---|---|---|
-| D1 | HIGH | Log out | — |
-| D2 | LOW | Wait 60s. `/gc comms` | Still `Total addon users: 2` and `BDR: <HIGH>`. **This is the code's behaviour, not a pass.** Only the DR is ever evicted (`Comms.lua:443-466`), and roster-based eviction was removed (`Comms.lua:470-476`). Record it as a finding |
-| D3 | HIGH | Log back in. Wait 30s. Both `/gc comms` | Back to the E4 state |
-| D4 | HIGH | `/gc debug` | `Debug mode: ON` |
-| D5 | LOW | Log out | — |
-| D6 | HIGH | Wait up to 4 minutes; the watchdog checks every 60s, and the timeout is 180s | `[debug] DR heartbeat timeout — removing <LOW>`, `[debug] You are now the Designated Router (DR).`, `[debug] DR term advanced to <n>`, and `Role changed: BDR → DR` |
-| D7 | HIGH | `/gc comms` | `My role: DR`, `DR: <HIGH>`, `BDR: none` |
-| D8 | LOW | Log back in. Wait 60s. Both `/gc comms` | Both agree on `DR: <LOW>` and `BDR: <HIGH>`. HIGH printed `Role changed: DR → BDR` if its debug was still on |
-
-**Fail:** D6 never fires within 4 minutes, or D8 leaves both as DR, or they disagree after 2
-minutes. For D8, note whether HIGH printed `Dropping stale HEARTBEAT`: LOW comes back with a
-lower term than the one HIGH adopted at D6.
-
-#### P — Delta propagation
-
-A delta only goes out when a scan finds new recipes. Use a profession window that has never
-been opened on that character, or learn one new recipe from a trainer first.
-
-| Step | Who | Do | Expect |
-|---|---|---|---|
-| P1 | both | `/gc debug` | `Debug mode: ON` |
-| P2 | A | Open the profession window | A: `Scanned <Prof>: <N> new recipe(s) found.`, `[debug] Broadcast DELTA_UPDATE (add) for <A> <Prof>` |
-| P3 | B | Watch chat | `[debug] DELTA_UPDATE (add) from <A sender> for <A>`, plus one `[debug] Delta merged: <A> <Prof> <recipeKey>` per recipe |
-| P4 | B | `/gc`, then `<Prof>`, then A's name | The same N recipes |
-| P5–P7 | swap A and B | Repeat P2–P4 the other way | Same, mirrored |
-
-**Fail:** P3 prints nothing, or P4 shows a different count. P3 prints the sender after it has
-been resolved to a GUID, so it should equal A's key from S1. If B is on a different server
-prefix from A (`Player-4613-` vs `Player-4619-`), run `SND` on A first, then on B. A's listener
-stays armed, so A prints a second `SND` line with B's raw sender name as A's client sees it.
-P2–P4 in that direction show whether a whisper reaches them.
-
-#### R — Pause under a restriction
-
-Needs `RA` to pass. Entering an instance already pauses sync on its own, so R isolates the
-restriction by watching the debug lines and `SP`.
-
-| Step | Who | Do | Expect |
-|---|---|---|---|
-| R1 | A | `RE`, then `/gc debug` | `RE armed`, `Debug mode: ON` |
-| R2 | A | Enter a dungeon. Wait 15s, then `SP` | `[debug] SyncPausePolicy: inside instance — sync paused`; `SP true false true false` (the 12s zone-transition flag has cleared) |
-| R3 | A | Pull the first boss. During the fight run `SP` | Ignore `RE` lines with type 0 (Combat). Expect `RE <time> 1 1` or `RE <time> 1 2`, `[debug] SyncPausePolicy: restriction Encounter active — sync paused`, and `SP true true true false 1` (combat is set too) |
-| R4 | A | Kill or wipe. Wait 10s, then `SP` | `RE <time> 1 0`, `[debug] SyncPausePolicy: restriction Encounter lifted`, and `SP true false true false` with nothing after (combat's 6s grace has run out) |
-| R5 | A | Still inside, open a profession with a new recipe (see P) | `Scanned … new`, then `[debug] BroadcastNewRecipes suppressed (SyncPausePolicy) for <Prof>` |
-| R6 | B | Watch chat | Nothing from A |
-| R7 | A | Leave the instance. Wait 20s | `[debug] SyncPausePolicy: instance grace expired — sync resumed` |
-| R8 | B | `/gc dump`, then `/reload`, wait 30s, `/gc dump` | The first dump is missing A's new recipes. The second has them. Suppressed deltas are dropped, not queued (`Comms.lua:1062-1066`), so B only catches up at its next login sync |
-| R9 | A | Optional: pull a boss again and `/reload` mid-fight. `SP` | Ends with `1`, from the state read at `OnEnable` |
-
-**Fail:** R3 shows no `RE` line, which means the event never fired on Forever. R3's debug line
-missing while `RE` fires means GuildCrafts didn't register it. B receives A's delta at R6.
+Not run yet. It's the Phase 2 exit gate in `spec/forever-plan.md`.
 
 ---
 
@@ -430,18 +349,13 @@ the only way a GuildCrafts file reaches CurseForge project 1469206.
 `release.sh` finds every `GuildCrafts{,_Vanilla,_TBC,_Wrath,_Cata,_Mists,_Camelot}.toc`
 (`release.sh:1389-1423`) and adds a game version for each (`:1343-1355`). That happens
 before `ignore:` is applied, which only runs while copying files (`:1852-1862`, `:2042`). In a
-dry run, ignoring the five TOCs produced a zip holding only `GuildCrafts_Camelot.toc` that
-was still tagged `5.5.4, 4.4.2, 3.4.3, 2.5.6, 1.60.1, 1.15.7`.
+local dry run on 2026-10-02, ignoring the five TOCs produced a zip holding only
+`GuildCrafts_Camelot.toc` that was still tagged `5.5.4, 4.4.2, 3.4.3, 2.5.6, 1.60.1, 1.15.7`.
 
-### Mechanism and fail-safe
+### Mechanism
 
-| Layer | What it does | If it's missing |
-|---|---|---|
-| Strip | Deletes the five non-Forever TOCs and `Data/`, then requires exactly one TOC (`GuildCrafts_Camelot.toc`, Interface `16xxx`) | `-g forever` catches it |
-| `-g forever` | Only Forever interfaces count (`:294-336`, `:1353`). Any non-Forever TOC left over makes `release.sh` exit 1 (`:1314`) | The gate catches it |
-| `-d` stage | Packages with no upload and no tokens in env | — |
-| Gate | Fails unless the log shows exactly one `Game version:` line, all `1.6x.y`, and `Build type: non-retail version-forever`. Also fails unless the zip and the package folder hold only `GuildCrafts/GuildCrafts_Camelot.toc` (no `Data/`) and ChatThrottleLib is v32 or later | Nothing uploads |
-| Publish | Tag only. Re-zips the gated folder (`-c -o -g forever`) and checks that every `Uploading … (1.6x.y …)` line lists Forever versions only | — |
+`docs/releasing.md` describes the strip, `-d -g forever` stage, gate and publish steps as
+they stand. The results below are the dated checks of that mechanism.
 
 Checked locally on 2026-10-02 against `a1c0554`:
 - Strip plus `-d -g forever` gave `Game version: 1.60.1`, `Build type: non-retail
@@ -461,51 +375,30 @@ On GitHub on 2026-10-03, `workflow_dispatch` with `publish=false` (run `37093088
   to the vetted v32 `3491b6c9…6dde8`.
 - No real CurseForge upload has been made yet.
 
-### Draft-upload test plan
+### Release procedure
 
-CurseForge's upload API has no private draft. An `alpha` file is the most restricted upload:
-it's listed on the project's Files tab, but clients set to Release or Beta don't install it.
-If you want nothing visible at all, stop after step 3.
-
-1. **One-time setup on `lxhwes/GuildCrafts-Forever`.**
-   - Enable Actions (Settings → Actions → General), because forks start with them disabled.
-   - Create a CurseForge API token on your CurseForge account. You're an author on 1469206.
-   - Store it as a repo secret from your own terminal, not this chat:
-     `gh secret set CF_API_KEY --repo lxhwes/GuildCrafts-Forever`
-2. **Dry run.** After the PR is merged into the fork's `main`, run
-   `gh workflow run release.yml --repo lxhwes/GuildCrafts-Forever -f publish=false`,
-   then `gh run watch --repo lxhwes/GuildCrafts-Forever`. Expect a step log line
-   `forever-gate: OK (Game version: 1.60.1; GuildCrafts-<sha>-forever.zip; CTL v32)`.
-3. **Inspect the artifact.** Run `gh run download --repo lxhwes/GuildCrafts-Forever -n guildcrafts-forever`,
-   then `unzip -Z1 GuildCrafts-*-forever.zip | grep '\.toc$' | grep -v /Libs/`. Expect exactly
-   `GuildCrafts/GuildCrafts_Camelot.toc`.
-4. **Alpha upload.** Tag and push: `git tag v2.1.0-alpha1 && git push origin v2.1.0-alpha1`.
-   The workflow should end with `Uploading GuildCrafts-v2.1.0-alpha1-forever.zip (1.60.1 alpha)`
-   and `Success!`.
-5. **Check CurseForge.** On project 1469206 → Files, open the new file. Expect one game
-   version, WoW Forever `1.60.1`, and release type Alpha. Nothing should be tagged Classic,
-   TBC, Wrath, Cata or Mists. If anything else shows, delete or archive the file at once and
-   tell me what the file page lists.
-6. **Release.** Only after step 5 passes, tag `v2.1.0` for a release-type file.
+The draft-upload plan that was here moved to `docs/releasing.md` on 2026-10-03. Its alpha-tag
+example is replaced there by the beta tag planned in `spec/forever-plan.md`.
 
 ---
 
 ## Question log
 
-Answers and partial answers from the in-game runs. Questions still open are tracked as Q1–Q7
-in `spec/forever-plan.md`.
+Answers and partial answers from the in-game runs. Open questions are tracked in the "Open
+questions" table of `spec/forever-plan.md`; each entry below names its Q number there.
 
 1. **Client build** of the 2026-10-02 runs. `GetBuildInfo()` printed only the `1.60.1` version
-   string; the build number (second return) wasn't captured.
+   string; the build number (second return) wasn't captured. Open as Q1, to be closed by
+   `/gc report` (H5).
 2. **`C_RestrictedActions` at runtime.** Does it exist, and does
    `ADDON_RESTRICTION_STATE_CHANGED` fire on entering a boss encounter? Task 4 depends on it.
    Probes: `RA`, `RS`, `RE`. **Partly answered 2026-10-02:** `RA true true true true false`, so
    the API and both enums exist and chat isn't locked down. `RS` listed all six types with the
    documented values (Combat 0, Encounter 1, ChallengeMode 2, PvPMatch 3, Map 4, Chat 5), each in
    state 0 (Inactive) in the open world. Whether the event fires at a boss pull (`RE`) is still
-   open: it needs a dungeon run.
-3. **Solo checklist items 3–8** passed in game on 2026-10-02. Item 9 and the two-client
-   checklist are not yet run.
+   open: it needs a dungeon run. Open as Q2 (H8).
+3. **Solo checklist.** Items 3–8 passed in game on 2026-10-02. Item 9 passed on 2026-10-03
+   (see "Test results"). Q3 is closed. The two-client checklist hasn't been run.
 4. **First `/gc dump` showed 0 recipes.** On 2026-10-02 it listed Cooking, Alchemy and
    Herbalism with 0 recipes each, and printed the key `Geo-Prizm` (F17 confirmed on that build).
    A re-run with `/gc debug` on the same day scanned correctly. Opening Alchemy printed
@@ -516,4 +409,4 @@ in `spec/forever-plan.md`.
    `Alchemy: 5 recipes` under the same guild key, `Grim-Classic Beta PvP`. So SavedVariables
    survived the relog and the partition key didn't move between those sessions. That rules
    out a partition change for this pair of sessions. Either no window was opened before the
-   first dump, or the scan exited silently.
+   first dump, or the scan exited silently. Open as Q4 (H5, H6).

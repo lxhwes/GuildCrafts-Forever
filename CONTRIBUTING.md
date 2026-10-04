@@ -1,89 +1,95 @@
-# Contributing to GuildCrafts
+# Contributing to GuildCrafts for WoW Forever
 
-Thanks for your interest in contributing to GuildCrafts! This guide will help you get started.
+Thanks for helping. This fork adapts dkruenbo's GuildCrafts for WoW Forever, and contributions
+are welcome. Planned work and open findings are in
+[spec/forever-plan.md](spec/forever-plan.md). Check there, or in the
+[issues](https://github.com/lxhwes/GuildCrafts-Forever/issues), before starting something large.
 
-## Getting Started
+## Scope
 
-1. **Fork** the repository on GitHub
-2. **Clone** your fork locally:
-   ```bash
-   git clone https://github.com/<your-username>/GuildCrafts.git
-   ```
-3. **Create a branch** for your change:
-   ```bash
-   git checkout -b feature/my-change
-   ```
-4. Make your changes, commit, and **push to your fork**:
-   ```bash
-   git push origin feature/my-change
-   ```
-5. Open a **Pull Request** against the `main` branch of this repository
+- This fork maintains the Forever flavor only (`GuildCrafts/GuildCrafts_Camelot.toc`,
+  Interface 16001). [docs/ORIGIN.md](docs/ORIGIN.md) explains why.
+- Never edit the five Classic TOCs (`GuildCrafts.toc`, `GuildCrafts_Vanilla.toc`,
+  `GuildCrafts_Wrath.toc`, `GuildCrafts_Cata.toc`, `GuildCrafts_Mists.toc`) or
+  `GuildCrafts/Data/Data_*.lua`. They stay as upstream shipped them. Classic fixes belong
+  upstream at [dkruenbo/GuildCrafts](https://github.com/dkruenbo/GuildCrafts).
+- Feature-detect every API before calling it, and `pcall` anything that might error. Never
+  branch on the interface number.
+- Forever runs the Mainline API, but it isn't retail. Check every API against the `forever`
+  branch of [Gethe/wow-ui-source](https://github.com/Gethe/wow-ui-source/tree/forever). That
+  branch is the source of truth here, not retail documentation or memory of retail.
+- Read the relevant upstream RFC in [RFC/](RFC/) before changing sync or election code.
 
-## Development Setup
+## Development setup
 
-GuildCrafts is a World of Warcraft TBC Anniversary addon (Interface 20505, Lua 5.1).
+```bash
+git clone https://github.com/lxhwes/GuildCrafts-Forever.git
+cd GuildCrafts-Forever
+```
 
-To test locally:
-1. Clone/symlink the `GuildCrafts/` folder into your WoW addons directory:
-   ```
-   World of Warcraft/_classic_/Interface/AddOns/GuildCrafts
-   ```
-2. Reload the game UI with `/reload`
-3. Join a guild and open a profession window to populate local data
+Symlink the `GuildCrafts` folder from the clone into the Forever client's `Interface/AddOns/`,
+keeping the name `GuildCrafts`. On macOS or Linux:
 
-## Project Structure
+```bash
+ln -s "$PWD/GuildCrafts" "<Forever client folder>/Interface/AddOns/GuildCrafts"
+```
 
-| Folder | Contents |
-|--------|----------|
-| `GuildCrafts/` | The addon itself — all Lua, XML, TOC, and library files |
-| `spec/` | Design documents, user guide, and improvement tracker |
+On Windows, create a directory junction from a Command Prompt:
 
-## Code Style
+```bat
+mklink /J "<Forever client folder>\Interface\AddOns\GuildCrafts" "<clone>\GuildCrafts"
+```
 
-- Use local variables where possible
-- Follow existing naming conventions (camelCase for locals, PascalCase for methods)
-- Add comments for non-obvious logic
-- Keep functions focused — one responsibility per function
+Then `/reload` in game after each change. A checkout reports its version as `dev` in
+`/gc comms`.
 
-## What to Contribute
+## Verification
 
-GuildCrafts is feature complete for its original scope and is in maintenance mode. No new features are currently planned, but contributions are still welcome in these areas:
+Three regression scripts cover profession drop and relearn, Forever member keys, and the
+profession gate. Run them from the repository root under PUC Lua 5.1:
 
-- **Bug fixes** — if something behaves incorrectly, a focused fix is always welcome
-- **Locale/translation support** — the multi-language system is in place but real-world edge cases still surface occasionally
-- **Documentation improvements** — clearer explanations, better examples, corrected outdated information
-- **Performance or correctness improvements** — if you spot something wasteful or subtly wrong in the protocol or data handling
+```bash
+lua5.1 tools/test-profession-sync.lua
+lua5.1 tools/test-forever-identity.lua
+lua5.1 tools/test-profession-gate.lua
+```
 
-If you have an idea for a larger feature, open an issue to discuss it first — the project may not be actively extended, but the conversation is welcome.
+Each exits non-zero on a failure. They stub the WoW APIs, so they don't exercise the game
+client or the addon message transport. Add a case when you fix a bug they could have caught.
+[docs/testing.md](docs/testing.md) has the full testing guide.
 
-## Pull Request Guidelines
+For any change in behaviour, include in-game evidence in the PR. Paste the chat output that
+shows it working, for example `/gc dump`, `/gc comms` or `[debug]` lines from `/gc debug`.
+For sync or election changes, a run with two clients in the same guild is expected.
 
-Pull requests should be easy to review. If the intent and impact are unclear, the PR may be sent back for clarification before review.
+## Pull requests
 
-Please include:
+- Keep each PR focused on one change.
+- Use a conventional commit title, such as `fix(sync): keep drop history on relearn`. Types are
+  `feat`, `fix`, `docs`, `test`, `refactor`, `style` and `chore`.
+- When behaviour changes, update the docs it affects and add a line under `## Unreleased` in
+  [CHANGELOG.md](CHANGELOG.md).
+- Say what the problem was, why it happened if you know, what you changed, and how you
+  checked it.
+- PRs are squash-merged into `main`.
 
-- **Problem** — what issue does this solve? (bug, inefficiency, edge case)
-- **Root cause** — why does the issue occur? (if known)
-- **Change summary** — what did you change and how does it fix the problem?
-- **Scope** — what parts of the codebase are affected?
-- **Validation** — how did you test this in-game?
+## Reporting a bug
 
-Additional expectations:
+Open an issue at
+[lxhwes/GuildCrafts-Forever](https://github.com/lxhwes/GuildCrafts-Forever/issues) with:
 
-- Keep PRs focused on a single change
-- Changes should stay within the existing scope of the addon (no feature expansion)
-- Avoid introducing external dependencies or complexity outside the current design
-- Test in-game before submitting
-- Update documentation if your change affects user-facing behavior
+- the addon version, from the first line of `/gc comms`;
+- the client build, from `/dump GetBuildInfo()`;
+- what you expected and what happened;
+- steps to reproduce it;
+- the output of `/gc dump` and `/gc comms`;
+- the full text of any Lua error;
+- whether you were in an instance or in combat when it happened.
 
-## Bug Reports
+If you can reproduce it, type `/gc debug` first and include the `[debug]` lines. Debug mode
+turns off at every login and `/reload`.
 
-Open an issue with:
-- What you expected to happen
-- What actually happened
-- Steps to reproduce
-- Your WoW client version
+## Licence
 
-## License
-
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions are licensed under the
+[MIT License](LICENSE).

@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](forever-plan.md). The Forever migration record is [`spec/migration-forever.md`](migration-forever.md).
+
 # GuildCrafts — Classic Era / Hardcore / SoD Migration Guide
 
 > Target: Classic Era, Hardcore, Season of Discovery (interface version `11507`, patch 1.15.x)

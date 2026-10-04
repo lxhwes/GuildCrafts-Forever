@@ -1,3 +1,5 @@
+> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](docs/user-guide.md), [testing](docs/testing.md), [releasing](docs/releasing.md), [plan](spec/forever-plan.md). The fork's planned work is in [`spec/forever-plan.md`](spec/forever-plan.md). A roadmap rewrite is planned (D1 cut 2).
+
 # GuildCrafts — Roadmap
 
 Issue tracker: https://github.com/dkruenbo/GuildCrafts/issues
