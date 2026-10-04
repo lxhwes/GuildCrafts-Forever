@@ -81,7 +81,8 @@ yet. Open those windows too. After you learn new recipes, open the window again 
 - [Testing](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/testing.md)
 - [Releasing](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/releasing.md)
 - [Forever plan](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/spec/forever-plan.md):
-  planned work to launch and the open findings
+  phases to launch, linked to the [issues](https://github.com/lxhwes/GuildCrafts-Forever/issues)
+  that track the work
 - [Origin and permission](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/ORIGIN.md)
 - [Upstream RFCs](https://github.com/lxhwes/GuildCrafts-Forever/tree/main/RFC): upstream's
   architecture, sync protocol, data model, UI and release design. They're historical
