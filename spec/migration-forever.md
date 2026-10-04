@@ -382,6 +382,24 @@ example is replaced there by the beta tag planned in `spec/forever-plan.md`.
 
 ---
 
+## Battle.net web API (N9, 2026-10-03)
+
+**No Forever coverage.** Checked on 2026-10-03 against Blizzard's developer docs and forums. This
+was web research, not an in-game test.
+- The Classic namespaces are `*-classic1x-*` (Era), `*-classic-*` (Mists Progression) and
+  `*-classicann-*` (Anniversary). There's no Forever or Camelot namespace
+  ([namespaces](https://community.developer.battle.net/documentation/world-of-warcraft-classic/guides/namespaces)).
+- The Classic Profile APIs have Guild Roster but no Character Professions endpoint.
+- The forum thread "When will we gain API access to Forever APIs?" (2026-09-18) has no Blizzard
+  reply ([thread](https://us.forums.blizzard.com/en/blizzard/t/when-will-we-gain-api-access-to-forever-apis/59595)).
+
+Even if access opens, professions would need a new Classic endpoint. Forever has no realms,
+either, so realm-keyed paths may not map. The addon-plus-companion design (N4 ADR) doesn't
+depend on this API. Full notes are in `spec/later/research/2026-10-03-companion-n9.md`. #59 was
+closed as not planned on 2026-10-04.
+
+---
+
 ## Question log
 
 Answers and partial answers from the in-game runs. Open questions are tracked in the "Open
