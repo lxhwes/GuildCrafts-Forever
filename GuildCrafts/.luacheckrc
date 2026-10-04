@@ -42,6 +42,11 @@ read_globals = {
     "C_AddOns", "GetAddOnMetadata", "C_RestrictedActions", "Enum", "issecretvalue",
     "UnitGUID", "UnitNameUnmodified", "UnitFullName", "GetTime", "C_TradeSkillUI",
 
+    -- WoW API — Spells, items and professions (feature-detected at call sites)
+    "C_Spell", "C_SpellBook", "C_Item", "C_SkillLine", "GetSpellInfo", "GetSpellLink",
+    "IsPlayerSpell", "GetProfessions", "GetProfessionInfo", "IsTradeSkillLinked",
+    "GetClassicExpansionLevel", "TooltipDataProcessor",
+
     -- WoW API — Trade skills
     "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink",
     "GetTradeSkillRecipeLink", "GetTradeSkillLine", "ExpandTradeSkillSubClass",
@@ -63,17 +68,17 @@ read_globals = {
     "GuildRoster", "IsInGuild",
 
     -- WoW API — Combat
-    "InCombatLockdown", "UnitAffectingCombat",
+    "InCombatLockdown", "UnitAffectingCombat", "IsInInstance",
 
     -- WoW API — Chat
-    "SendChatMessage",
+    "SendChatMessage", "ChatFrame_OpenChat", "ChatEdit_InsertLink",
 
     -- WoW API — Sound
     "PlaySound", "SOUNDKIT",
 
     -- WoW API — Misc
     "GetAddOnMemoryUsage", "UpdateAddOnMemoryUsage",
-    "GetBuildInfo", "GetItemInfo", "IsMouseButtonDown", "IsSpellKnown",
+    "GetBuildInfo", "GetItemInfo", "IsMouseButtonDown", "IsShiftKeyDown", "IsSpellKnown",
     "UnitName", "GetRealmName", "ReloadUI",
     "time",
 

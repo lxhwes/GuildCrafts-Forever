@@ -262,8 +262,6 @@ local DB_DEFAULTS = {
         --     },
         --     lastUpdate = timestamp,
         -- }
-    },
-    global = {
         minimap = {
             hide        = false,
             minimapPos  = 45,  -- degrees, top-right
