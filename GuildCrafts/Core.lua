@@ -504,6 +504,12 @@ function GuildCrafts:SlashHandler(input)
         else
             self:Print("Comms module not loaded.")
         end
+    elseif input == "report" then
+        if self.Report then
+            self.Report:Show()
+        else
+            self:Print("Report module not loaded.")
+        end
     elseif input == "mem" then
         UpdateAddOnMemoryUsage()
         local mem = GetAddOnMemoryUsage(ADDON_NAME)
@@ -525,7 +531,7 @@ function GuildCrafts:SlashHandler(input)
             self:Print("MinimapButton module not loaded.")
         end
     else
-        self:Print("Commands: /gc, /gc debug, /gc dump, /gc comms, /gc mem, /gc minimap, /gc reset, /gc drop <profession>")
+        self:Print("Commands: /gc, /gc debug, /gc dump, /gc comms, /gc report, /gc mem, /gc minimap, /gc reset, /gc drop <profession>")
     end
 end
 
@@ -534,6 +540,8 @@ end
 ----------------------------------------------------------------------
 
 function GuildCrafts:Debug(...)
+    -- The ring buffer keeps every line so /gc report has history with debug mode off.
+    if self.Report then self.Report:Append(...) end
     if self.debugMode then
         self:Print("|cff888888[debug]|r", ...)
     end

@@ -136,13 +136,19 @@ function Comms:OnInitialize()
 
     -- Registered flag
     self._prefixRegistered = false
+
+    -- Discovery diagnostics for /gc report
+    self.prefixResult          = nil  -- RegisterAddonMessagePrefix return
+    self.lastMessageAt         = nil  -- last message from a resolved peer, never our own echo
+    self.unresolvedSenderDrops = 0
 end
 
 function Comms:OnEnable()
     -- Register the addon message prefix
     if not self._prefixRegistered then
-        C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
+        self.prefixResult = C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
         self._prefixRegistered = true
+        GuildCrafts:Debug("Prefix registration result:", self.prefixResult)
     end
 
     -- Register for AceComm messages
@@ -1444,8 +1450,16 @@ function Comms:ProcessIncoming(message, _distribution, sender)
 
     -- AceComm may strip realm punctuation; normalize it to the same key form
     -- used by Data:GetPlayerKey() before election or payload handling.
+    local rawSender = sender
     sender = GuildCrafts.Data:NormalizeMemberKey(sender)
-    if not sender then return end
+    if not sender then
+        self.unresolvedSenderDrops = self.unresolvedSenderDrops + 1
+        GuildCrafts:Debug("Dropped", envelope.t, "from unresolved sender", rawSender)
+        return
+    end
+    if sender ~= GuildCrafts.Data:GetPlayerKey() then
+        self.lastMessageAt = time()
+    end
 
     -- Update lastSeen for known addon users
     if self.addonUsers[sender] then

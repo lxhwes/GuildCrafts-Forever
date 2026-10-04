@@ -46,3 +46,6 @@ jobs:
 
       - name: Profession skill-line gate
         run: lua5.1 tools/test-profession-gate.lua
+
+      - name: Report and debug log
+        run: lua5.1 tools/test-report.lua
