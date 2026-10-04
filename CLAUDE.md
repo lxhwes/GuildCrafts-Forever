@@ -46,6 +46,7 @@ author's permission (`docs/ORIGIN.md`).
 | `docs/ORIGIN.md` | Provenance and the author's permission, quoted verbatim |
 | `spec/fork-review.md` | The 2026-09-28 review that defines F1–F21 and C1–C6; historical, status lives in the issues |
 | `spec/curseforge-audit.md` | The 2026-10-03 audit of upstream player reports that defines F22–F40; evidence at `60c6b32` |
+| `spec/later/` | Implementation specs for Later items N1–N8, the N4 ADR and threat model, and their research |
 | `RFC/`, other `spec/*.md`, `ROADMAP.md` | Upstream history, bannered as such |
 
 In markdown table cells, escape `|` as `\|`, even inside backticks.
