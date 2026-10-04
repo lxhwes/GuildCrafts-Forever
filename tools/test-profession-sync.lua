@@ -363,6 +363,106 @@ test("unrelated profession touch does not block removal", function()
     assert(db["Owner-Realm"].professions.Cooking.lastUpdate == 1100)
 end)
 
+-- H11: a client with empty SavedVariables gets its own recipes back from peers.
+local function syncRequestFrom(owner)
+    Comms.myRole, Comms.currentDR, Comms.syncTimer, Comms.syncRetryCount = "OTHER", nil, nil, 0
+    Comms.ScheduleTimer = function() end
+    playerKey = owner
+    Comms:SendSyncRequest()
+    for _, message in ipairs(sent) do
+        if message.kind == "SYNC_REQUEST" then return message.payload end
+    end
+end
+local function responseData()
+    for _, message in ipairs(sent) do
+        if message.kind == "SYNC_RESPONSE" then return message.payload.data end
+    end
+end
+
+test("empty local SavedVariables get own recipes back after sync", function()
+    local ownerDb, drDb = {}, { ["Owner-Realm"] = entry({ Alchemy = profession(5, 100, 500) }, 500) }
+    db = ownerDb
+    known = { indices = { 1 }, [1] = "Alchemy" }
+    Data:DetectProfessions()
+    local stamped = ownerDb["Owner-Realm"].lastUpdate
+    local request = syncRequestFrom("Owner-Realm")
+    assert(request and request.restoreOwn == 1, "request did not ask for its own entry")
+
+    db, playerKey, sent = drDb, "Dr-Realm", {}
+    Comms.myRole, Comms.syncProcessing = "DR", false
+    Comms:HandleSyncRequest(request, "Owner-Realm")
+    local data = responseData()
+    assert(data and data["Owner-Realm"], "DR did not send the requester's own entry")
+
+    db, playerKey = ownerDb, "Owner-Realm"
+    assert(Data:MergeIncoming(data), "restore reported no change")
+    assert(count(ownerDb["Owner-Realm"].professions.Alchemy) == 5, "recipes not restored")
+    assert(ownerDb["Owner-Realm"].lastUpdate == stamped, "restore changed the member revision")
+end)
+
+test("DR still pulls the requester's fresh snapshot when restoring", function()
+    db = { ["Owner-Realm"] = entry({ Alchemy = profession(5) }, 500) }
+    playerKey = "Dr-Realm"
+    Comms.myRole, Comms.syncProcessing = "DR", false
+    Comms:HandleSyncRequest({ sender = "Owner-Realm", vector = { ["Owner-Realm"] = 1000 }, restoreOwn = 1 }, "Owner-Realm")
+    local pulled
+    for _, message in ipairs(sent) do
+        if message.kind == "SYNC_PULL" then pulled = message.payload.memberKeys[1] end
+    end
+    assert(pulled == "Owner-Realm", "pull of the requester's snapshot lost")
+end)
+
+test("DR sends the requester's own entry only when asked", function()
+    db = { ["Owner-Realm"] = entry({ Alchemy = profession(5) }, 500) }
+    playerKey = "Dr-Realm"
+    Comms:ProcessSyncRequest("Owner-Realm", { ["Owner-Realm"] = 1000 })
+    local data = responseData()
+    assert(not (data and data["Owner-Realm"]), "own entry sent without restoreOwn")
+end)
+
+test("request has no restoreOwn when every known profession has recipes", function()
+    db[playerKey] = entry({ Alchemy = profession(3) }, 800)
+    known = { indices = { 1, 2 }, [1] = "Alchemy", [2] = "Herbalism" }
+    Data:DetectProfessions()
+    local request = syncRequestFrom(playerKey)
+    assert(request and request.restoreOwn == nil, "gathering or full professions asked for a restore")
+end)
+
+test("restore never removes or replaces own recipes", function()
+    db[playerKey] = entry({ Alchemy = profession(3), Cooking = profession(0) }, 800)
+    known = { indices = { 1, 2 }, [1] = "Alchemy", [2] = "Cooking" }
+    Data:DetectProfessions()
+    Data:MergeIncoming({ [playerKey] = entry({ Alchemy = profession(10, 50), Cooking = profession(4, 80) }, 900) })
+    local alchemy = db[playerKey].professions.Alchemy
+    assert(count(alchemy) == 3 and alchemy.recipes[1] and not alchemy.recipes[51], "existing recipes replaced")
+    assert(count(db[playerKey].professions.Cooking) == 4, "empty profession not filled")
+end)
+
+test("restore skips professions no longer known", function()
+    db[playerKey] = entry({ Alchemy = profession(3) }, 800)
+    known = { indices = { 1 }, [1] = "Alchemy" }
+    Data:DetectProfessions()
+    Data:MergeIncoming({ [playerKey] = entry({ Alchemy = profession(3), Tailoring = profession(6) }, 900) })
+    assert(not db[playerKey].professions.Tailoring, "restored a profession the character doesn't know")
+end)
+
+test("restore skips copies older than a local drop", function()
+    db[playerKey] = entry({}, 1000, { Alchemy = 950 })
+    known = { indices = { 1 }, [1] = "Alchemy" }
+    Data:DetectProfessions()
+    Data:MergeIncoming({ [playerKey] = entry({ Alchemy = profession(5) }, 900) })
+    assert(count(db[playerKey].professions.Alchemy) == 0, "pre-drop recipes restored")
+end)
+
+test("restore adopts a newer drop revision from the peer copy", function()
+    db = {}
+    known = { indices = { 1 }, [1] = "Alchemy" }
+    Data:DetectProfessions()
+    Data:MergeIncoming({ [playerKey] = entry({ Alchemy = profession(5, 0, 990) }, 990, { Alchemy = 700 }) })
+    assert(count(db[playerKey].professions.Alchemy) == 5)
+    assert(db[playerKey].dropped and db[playerKey].dropped.Alchemy == 700, "drop history not adopted")
+end)
+
 local failed = 0
 for _, case in ipairs(tests) do
     reset()

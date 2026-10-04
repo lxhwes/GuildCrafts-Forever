@@ -540,6 +540,8 @@ function Comms:SendSyncRequest()
         sender = playerKey,
         vector = vector,
         retry  = effectiveRetry,
+        -- Optional, so older DRs ignore it. 1, not true: SavedVariables-safe habit.
+        restoreOwn = GuildCrafts.Data:NeedsOwnRestore() and 1 or nil,
     }, "GUILD")
 
     self.syncPending = true
@@ -643,15 +645,19 @@ function Comms:HandleSyncRequest(payload, sender)
 
     -- Queue if we're already processing a sync (DR queuing)
     if self.syncProcessing then
-        self.syncQueue[#self.syncQueue + 1] = { requester = requester, vector = payload.vector }
+        self.syncQueue[#self.syncQueue + 1] = {
+            requester = requester, vector = payload.vector, restoreOwn = payload.restoreOwn,
+        }
         GuildCrafts:Debug("Queued SYNC_REQUEST from", requester, "(queue size:", #self.syncQueue, ")")
         return
     end
 
-    self:ProcessSyncRequest(requester, payload.vector or {})
+    self:ProcessSyncRequest(requester, payload.vector or {}, payload.restoreOwn)
 end
 
-function Comms:ProcessSyncRequest(requester, incomingVector)
+--- restoreOwn == 1: the requester has known professions with no recipes and
+--- wants our copy of its own entry, which its newer vector would otherwise skip.
+function Comms:ProcessSyncRequest(requester, incomingVector, restoreOwn)
     self.syncProcessing = true
 
     local localVector = GuildCrafts.Data:GetVersionVector()
@@ -681,6 +687,12 @@ function Comms:ProcessSyncRequest(requester, incomingVector)
             -- Equal timestamps still need drop-history reconciliation.
             toSend[memberKey] = GuildCrafts.Data:StripSyncFields(db[memberKey])
         end
+    end
+
+    local ownEntry = db[requester]
+    if restoreOwn == 1 and not toSend[requester] and type(ownEntry) == "table" and not ownEntry._tombstone then
+        toSend[requester] = GuildCrafts.Data:StripSyncFields(ownEntry)
+        GuildCrafts:Debug("Including", requester, "own entry for restore")
     end
 
     -- Check incoming vector for entries we don't have or are behind on
@@ -752,7 +764,7 @@ function Comms:ProcessNextSyncQueue()
     if #self.syncQueue > 0 then
         local next = table.remove(self.syncQueue, 1)
         GuildCrafts:Debug("Processing queued SYNC_REQUEST from", next.requester)
-        self:ProcessSyncRequest(next.requester, next.vector)
+        self:ProcessSyncRequest(next.requester, next.vector, next.restoreOwn)
     end
 end
 
