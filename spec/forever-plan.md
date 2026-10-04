@@ -47,22 +47,22 @@ regardless of position.
 
 | ID | Issue | Item | Tags |
 |---|---|---|---|
-| H1 | [#4] | CI: luacheck and the three regression suites | `blocker` |
+| H1 | [#4] | ~~CI: luacheck and the regression suites~~ | Done: PR #41, issue closed 2026-10-04 |
 | H2 | [#5] | Server time for sync revisions | `blocker`, `needs-ingame` |
 | H3 | [#6] | Persist GUID → name (unverified); roster-based prune (F35) | `hardening`, `needs-ingame`; `blocker` if the GRO probe confirms F35 |
 | H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening` |
-| H5 | [#8] | `/gc report` | `blocker` for Phase 3 |
+| H5 | [#8] | ~~`/gc report`~~ | Done: PR #50, issue closed 2026-10-04 |
 | H6 | [#9] | Scan diagnostics | `hardening` |
 | H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame` |
 | H8 | [#11] | SyncPausePolicy follow-ups after Q2; silent send failures (F34) | `needs-ingame` |
 | H9 | [#12] | ~~`/gc drop` after an empty read~~ | Done: PR #43, issue closed 2026-10-04 |
 | H10 | [#13] | Guild views scanned as your own (F5) | `blocker`, `needs-ingame` |
-| H11 | [#14] | Restore your own data from peers (F1) | `hardening` |
+| H11 | [#14] | ~~Restore your own data from peers (F1)~~ | Done: PR #69, issue closed 2026-10-04 |
 | H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening` |
-| H13 | [#16] | Favorites write booleans to SavedVariables | `hardening` |
+| H13 | [#16] | ~~Favorites write booleans to SavedVariables~~ | Done: PR #67, issue closed 2026-10-04 |
 | H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `blocker` for Phase 3 |
 | H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening` |
-| H16 | [#19] | Tooltip taint and rebuilds (F9, F10) | `hardening` |
+| H16 | [#19] | ~~Tooltip taint and rebuilds (F9, F10)~~ | Done: F10 in PR #41, F9 in PR #68, issue closed 2026-10-04 |
 | H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, needed for wave 2 |
 | H18 | [#21] | Release workflow guards | `hardening`, before the first publish |
 | H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`; F29 before wave 1, the rest before wave 3 |
@@ -70,7 +70,7 @@ regardless of position.
 
 **Phase 1 exit gate:**
 - CI green on `main`.
-- Every `blocker` (H1, H2, H5, H9, H10, H14) merged. H9 done (PR #43).
+- Every `blocker` (H1, H2, H5, H9, H10, H14) merged. H1, H5 and H9 done (PRs #41, #50, #43).
 - The rest either merged or deferred in its issue with a reason.
 - H8 answered or explicitly deferred.
 - The GRO and CHL probes run. If GRO confirms F35 or CHL confirms F25, that fix is merged.
@@ -248,7 +248,7 @@ Status as of `8f0dc69`.
 
 | ID | Finding | Status |
 |---|---|---|
-| F1 | Empty SavedVariables wipe your recipes on every peer | Peers keep them now (`fd788e6`, `f0522c4`); restoring your own copy is H11 [#14] |
+| F1 | Empty SavedVariables wipe your recipes on every peer | Closed: peers keep them (`fd788e6`, `f0522c4`); your own empty professions refill from the DR at sync, H11 PR #69 |
 | F2 | `GetProfessions` read as five slots | Closed: Forever's slots are prof1, prof2, First Aid, Fishing, Cooking (`Camelot/Blizzard_ProfessionsBook.lua:21`, `PROF` probe) |
 | F3 | First Aid not tracked | Open, H17 [#20] |
 | F4 | `!gc` echo abuse | Open, H14 [#17] |
@@ -256,8 +256,8 @@ Status as of `8f0dc69`.
 | F6 | Sync whispers strip the realm | Fixed on Forever: whisper targets come from the roster (`9faf497`) |
 | F7 | RESUME duplicates transfers | Open, H12 [#15] |
 | F8 | DR silent after a higher term | Open, H12 [#15]. The stale DR keeps answering `!gc` (audit R4) |
-| F9 | Tooltip debounce never debounces | Open, H16 [#19]. Also the in-combat path (`Tooltip.lua:45-46`); costs about M/5 full rebuilds per sync (audit P1) |
-| F10 | Tooltip writes the global `_` | Open, H16 [#19]; fixed by H1's zero-warning pass |
+| F9 | Tooltip debounce never debounces | Closed: one rebuild per sync burst and one in-combat retry, H16 PR #68 |
+| F10 | Tooltip writes the global `_` | Closed: fixed by H1's zero-warning pass (PR #41) |
 | F11 | Scan retries uncapped | Open, H15 [#18] |
 | F12 | Categories lost (`categoryName`) | Open, H15 [#18] |
 | F13 | Election watchdog resets on every recompute | Open, H12 [#15] |
