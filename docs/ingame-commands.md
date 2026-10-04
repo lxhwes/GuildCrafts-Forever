@@ -123,3 +123,19 @@ Run any time GuildCrafts is loaded. GuildCrafts' own pause state: `ShouldPause()
 ```
 /run local P=GuildCrafts.SyncPausePolicy;local t={};for k in pairs(P._restrictions or {})do t[#t+1]=k;end;print("SP",P:ShouldPause(),P._inCombat,P._inInstance,P._inTransition,table.concat(t,","));
 ```
+
+## GRO
+
+Run in a guild twice, once with the roster's Show Offline Members unchecked and once checked: total members, online members, offline rows with a name, and how many of those have a GUID. An offline count of 0 with it unchecked means the roster lists only online members; offline rows with a GUID count of 0 means those rows have no GUID.
+
+```
+/run local R=GetGuildRosterInfo;if not R then print("GRO nil");return;end;local t,o=GetNumGuildMembers();local f,g=0,0;for i=1,t do local n,_,_,_,_,_,_,_,x,_,_,_,_,_,_,_,u=R(i);if n and not x then f=f+1;if u then g=g+1;end;end;end;print("GRO",t,o,f,g);
+```
+
+## CHL
+
+Run anywhere. `true`/`false` for whether each chat API exists: global `ChatEdit_InsertLink`, global `ChatFrame_OpenChat`, `ChatFrameUtil.InsertLink`, `ChatFrameUtil.OpenChat`. GuildCrafts' shift-click link and `[W]` button call the first two; `false` there means both error on click.
+
+```
+/run print("CHL",ChatEdit_InsertLink~=nil,ChatFrame_OpenChat~=nil,ChatFrameUtil~=nil and ChatFrameUtil.InsertLink~=nil,ChatFrameUtil~=nil and ChatFrameUtil.OpenChat~=nil);
+```
