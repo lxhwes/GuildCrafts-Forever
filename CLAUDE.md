@@ -35,7 +35,7 @@ author's permission (`docs/ORIGIN.md`).
 
 | Doc | What it's for |
 |---|---|
-| `spec/forever-plan.md` | Planned work: phases to the Nov 4 launch, H/F/C/Q IDs, decisions. Check before proposing work |
+| `spec/forever-plan.md` | Phases to the Nov 4 launch, their gates, the plan-ID → issue index, decisions. Work items are GitHub Issues #4–#39; check both before proposing work |
 | `spec/migration-forever.md` | Dated decisions and in-game evidence |
 | `docs/releasing.md` | The release runbook |
 | `docs/testing.md` | Regression commands, solo and two-client procedures |
