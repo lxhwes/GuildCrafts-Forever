@@ -42,6 +42,7 @@ author's permission (`docs/ORIGIN.md`).
 | `docs/ingame-commands.md` | Copyable `/run` probes, mirrored to the gist |
 | `docs/user-guide.md` | Player-facing usage and limitations |
 | `docs/ORIGIN.md` | Provenance and the author's permission, quoted verbatim |
+| `spec/fork-review.md` | The 2026-09-28 review that defines F1–F21 and C1–C6; historical, status lives in the issues |
 | `RFC/`, other `spec/*.md`, `ROADMAP.md` | Upstream history, bannered as such |
 
 ---

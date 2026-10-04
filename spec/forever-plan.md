@@ -2,8 +2,9 @@
 
 Written 2026-10-03 against `main` at `8f0dc69`. It merges Alex's beta plan with:
 - every item still open in `spec/migration-forever.md`;
-- the 2026-09-28 fork review (finding IDs F1–F21 and C1–C6, indexed at the end);
-- the legacynext reuse review;
+- the 2026-09-28 fork review ([`spec/fork-review.md`](fork-review.md), finding IDs F1–F21 and
+  C1–C6, indexed at the end);
+- the legacynext reuse review (kept local);
 - the open items from the 2026-10-02/03 sessions;
 - Alex's documentation review (`spec/documentation-refresh-plan.md`, kept local), as D1.
 
@@ -30,9 +31,9 @@ guild. Nothing goes to guildmates until Phase 2's exit gate passes.
 - The `ROADMAP.md` rewrite moved to D1 cut 2 ([#22]). Until then it carries a history banner
   that points here.
 
-Still open: decide whether `spec/fork-review.md`, `spec/legacynext-reuse-plan.md`,
-`spec/documentation-refresh-plan.md` and `plan.md` are committed as dated historical notes or
-stay local. All are optional, because the issues carry their open items.
+- Local working notes, decided 2026-10-03: `spec/fork-review.md` is committed as a dated
+  historical review, because the issues cite its finding IDs. The legacynext reuse review and
+  the documentation review stay local. The first-draft `plan.md` was deleted.
 
 ---
 
