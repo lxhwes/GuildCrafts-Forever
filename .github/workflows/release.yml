@@ -11,6 +11,10 @@ name: Release (Forever only)
 #   3. Gate: the packager log, the zip and the package folder must all be
 #      Forever-only, or the job fails before anything is uploaded.
 #   4. Publish only from a tag, re-zipping the folder the gate checked (-c -o).
+#
+# Before any of that, ci.yml runs on the same commit (lint and every suite), and a
+# publishing run must pass .github/scripts/release-preflight.sh: a CF_API_KEY, and HEAD
+# carrying exactly one tag, a v* tag that isn't also a branch name.
 
 on:
   push:
@@ -35,7 +39,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ci.yml itself, so nothing ships that CI would reject and the two can't drift.
+  lint-and-test:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+
   package:
+    needs: lint-and-test
     runs-on: ubuntu-latest
     env:
       # BigWigsMods/packager v2.6.1 (= v2 on 2026-10-02). Bump on purpose, then dry-run.
@@ -43,24 +54,28 @@ jobs:
       PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
     steps:
       - name: Check out GuildCrafts
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # changelog and version come from tags and history
           ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Refuse to publish without a CurseForge token and one v* tag on HEAD
+        if: env.PUBLISH == 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_REF: ${{ inputs.ref }}
+          # true/false only; the token itself never enters this step.
+          HAS_CF_API_KEY: ${{ secrets.CF_API_KEY != '' }}
+        run: bash .github/scripts/release-preflight.sh
 
       - name: Check out the packager at a pinned commit
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: BigWigsMods/packager
           ref: ${{ env.PACKAGER_SHA }}
           path: .packager   # dot-dir: release.sh never packages it (release.sh:1829)
-
-      - name: Refuse to publish anything but a tag
-        if: env.PUBLISH == 'true'
-        run: |
-          tag=$(git tag --points-at HEAD | head -n1)
-          [[ -n $tag ]] || { echo "::error::Publishing needs HEAD to be a tag."; exit 1; }
-          echo "Publishing $tag"
+          persist-credentials: false
 
       - name: Strip every flavor except Forever
         working-directory: GuildCrafts
@@ -121,7 +136,7 @@ jobs:
           echo "forever-gate: OK (${gv[0]}; $(basename "$zip"); CTL v$ctl)"
 
       - name: Keep the checked zip
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: guildcrafts-forever
           path: ${{ runner.temp }}/release/*.zip

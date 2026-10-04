@@ -16,8 +16,19 @@ The last verified run is the 2026-10-03 dry run, run `37093088953`, which packag
 
 ## How the workflow stays Forever-only
 
-`release.yml` is the only release path. It runs in this order. Steps 1 to 3 each fail the job
-before anything uploads.
+`release.yml` is the only release path. Two checks run before anything is packaged:
+
+- The `lint-and-test` job runs `ci.yml` itself on the commit being released: luacheck and
+  every regression suite. The `package` job needs it, so a tag can't ship anything CI would
+  reject, and the two lists can't drift.
+- A publishing run then runs `.github/scripts/release-preflight.sh`. It fails unless the
+  `CF_API_KEY` secret is set, the ref is a `v*` tag that isn't also a branch name, that tag is
+  the checked-out commit, and it's the only tag on that commit. The step only learns whether
+  the secret is set, never its value. `tools/test-release-preflight.sh` covers each refusal and
+  runs in CI.
+
+The `package` job then runs in this order. Steps 1 to 3 each fail the job before anything
+uploads.
 
 1. The strip step deletes `GuildCrafts.toc`, `_Vanilla`, `_Wrath`, `_Cata`, `_Mists` and
    `Data/` from the checkout. It then requires exactly one TOC, `GuildCrafts_Camelot.toc`, with
@@ -42,7 +53,8 @@ before anything uploads.
 
 The checks inside the publish step run after the upload. They flag a bad upload: a missing
 CurseForge upload, a non-Forever version in an `Uploading …` line, or no `Success!`. They can't
-undo it. The gate in step 3 is what prevents one.
+undo it. Everything that can be checked beforehand is: the token and the tag by the preflight,
+and the package by the gate in step 3.
 
 ### Why `.pkgmeta` `ignore` isn't enough
 
@@ -56,8 +68,8 @@ ignoring the five Classic TOCs gave a zip holding only the Camelot TOC that was 
 
 - The packager is pinned to commit `e50a250f8705041e40f2fa1ddcb280a686d65aa0`
   (BigWigsMods/packager v2.6.1), set in `PACKAGER_SHA`. Bump it on purpose, then dry-run.
-- `actions/checkout` and `actions/upload-artifact` are referenced as `@v4`. Those are moving
-  tags, not commit SHAs.
+- `actions/checkout` and `actions/upload-artifact` are pinned to the commit SHAs of v7.0.1,
+  with the version in a trailing comment. `ci.yml` uses the same `actions/checkout` pin.
 
 ---
 
@@ -112,9 +124,9 @@ still listed on the project's Files tab, but clients set to Release or Beta don'
    gh secret list --repo lxhwes/GuildCrafts-Forever
    ```
 
-Without `CF_API_KEY`, the packager skips CurseForge without an error and still creates the
-GitHub release. The publish step then fails with `No CurseForge upload. Is CF_API_KEY set?`,
-and a GitHub release is left behind.
+Without `CF_API_KEY`, a publishing run fails at the preflight step with `CF_API_KEY is not
+set; refusing to publish`, before anything is packaged, so no GitHub release is created. The
+packager on its own would skip CurseForge without an error and still create the release.
 
 ---
 
@@ -262,14 +274,9 @@ Pushing a `v*` tag publishes at once. There is no confirmation step. Push tags t
 gh workflow run release.yml --repo lxhwes/GuildCrafts-Forever --ref main -f ref=<tag> -f publish=true
 ```
 
-Its only guard is the "Refuse to publish anything but a tag" step. That step runs
-`git tag --points-at HEAD | head -n1` and fails only when no tag at all points at the checked-out
-commit. It doesn't check for a `v*` name. So:
-
-- any tag passes, including one that isn't `v*`;
-- a branch or SHA passes too, if its commit happens to carry a tag;
-- if several tags point at the commit, the packager picks one by its own ordering, and that
-  tag sets the version and release type. It may not be the one the step printed.
+The preflight step refuses it unless `ref` names a `v*` tag, that tag is the checked-out
+commit, no branch has the same name, and no other tag points at the commit. A branch, a SHA or a
+blank `ref` is refused even if its commit carries a tag.
 
 Use this path only to retry a failed publish for an existing `v*` tag, and pass that tag name
 as `ref`. Check CurseForge first. The publish step's checks run after the upload, so a failed
@@ -282,5 +289,3 @@ run may already have uploaded a file, and a retry would upload a second one.
 - Changelog upload, Phase 2. `.pkgmeta` `manual-changelog` sends the whole `CHANGELOG.md`
   as each file's changelog. Most of it is upstream's Classic history. Not solved yet; see
   Phase 2 in `spec/forever-plan.md`.
-- Action pins. `actions/checkout@v4` and `actions/upload-artifact@v4` aren't pinned to
-  commit SHAs.

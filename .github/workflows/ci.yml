@@ -7,12 +7,22 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml runs this before packaging, so a tag passes the same gate as a PR.
+  workflow_call:
+    inputs:
+      ref:
+        description: "Commit to check out (blank = the event's ref)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # github.workflow is the caller's name when release.yml calls this, so a release run
+  # never cancels, or is cancelled by, a CI run on the same ref.
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,6 +34,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       - name: Install Lua 5.1 and luacheck
@@ -55,3 +66,6 @@ jobs:
 
       - name: Tooltip index scheduling
         run: lua5.1 tools/test-tooltip-index.lua
+
+      - name: Release preflight
+        run: bash tools/test-release-preflight.sh
