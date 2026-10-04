@@ -14,6 +14,18 @@ local UI = GuildCrafts.UI
 local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 local GetSpellLink = (C_Spell and C_Spell.GetSpellLink) or GetSpellLink
 
+-- Forever's chat helpers are on ChatFrameUtil; the old globals survive only as deprecated
+-- aliases (Blizzard_DeprecatedChatInfo/Deprecated_ChatFrame.lua:43, :74 at 9a789c0).
+-- Resolved at click time, so a late-loading alias still counts.
+local function GetChatFunction(method, legacyGlobal)
+    local util = _G.ChatFrameUtil
+    local fn = type(util) == "table" and util[method]
+    if type(fn) ~= "function" then
+        fn = _G[legacyGlobal]
+    end
+    if type(fn) == "function" then return fn end
+end
+
 -- Frame dimensions
 local DEFAULT_WIDTH  = 820
 local DEFAULT_HEIGHT = 540
@@ -1986,7 +1998,32 @@ end
 function UI:OpenWhisper(charKey, itemName)
     local name = GuildCrafts.Data:GetWhisperTarget(charKey)
     if not name then return end
-    ChatFrame_OpenChat("/w " .. name .. " Can you craft " .. itemName .. " for me?")
+    local text = "Can you craft " .. itemName .. " for me?"
+
+    -- Set the target on the edit box, as ChatFrameUtil.SendBNetTell does (ChatFrameUtil.lua:386-395
+    -- at 9a789c0). Typed "/w Geo Prizm ..." is split by autocomplete (ChatFrameEditBox.lua:73-120)
+    -- and can whisper "Geo" (F20). OnShow's ResetChatType leaves WHISPER alone (:580-596).
+    -- OpenChat gets the box's frame: without one it sends plain text to a chat focus override,
+    -- such as the Communities box (ChatFrameUtil.lua:434-438, CommunitiesChatFrame.lua:492).
+    local util = _G.ChatFrameUtil
+    if type(util) == "table" and type(util.ChooseBoxForSend) == "function"
+        and type(util.OpenChat) == "function" then
+        local editBox = util.ChooseBoxForSend()
+        if editBox and editBox.chatFrame and type(editBox.SetTellTarget) == "function"
+            and type(editBox.SetChatType) == "function" then
+            editBox:SetTellTarget(name)
+            editBox:SetChatType("WHISPER")
+            util.OpenChat(text, editBox.chatFrame)
+            return
+        end
+    end
+
+    local openChat = GetChatFunction("OpenChat", "ChatFrame_OpenChat")
+    if not openChat then
+        GuildCrafts:Print("Can't open a whisper: this client has no chat API GuildCrafts knows.")
+        return
+    end
+    openChat("/w " .. name .. " " .. text)
 end
 
 --- Create a [W] whisper button for the given crafter list.
@@ -2406,7 +2443,12 @@ function UI:LinkRecipeToChat(recipeKey)
         link = GetSpellLink(-k)
     end
     if link then
-        ChatEdit_InsertLink(link)
+        local insertLink = GetChatFunction("InsertLink", "ChatEdit_InsertLink")
+        if not insertLink then
+            GuildCrafts:Print("Can't link to chat: this client has no chat API GuildCrafts knows.")
+            return
+        end
+        insertLink(link)
     end
 end
 
