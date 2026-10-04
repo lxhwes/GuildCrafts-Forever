@@ -132,6 +132,7 @@ GuildCrafts/
     ForeverIdentity.lua    -- Forever only (Camelot TOC): GUID member keys, roster names
     Comms.lua              -- Sync protocol, DR/BDR election
     SyncPausePolicy.lua    -- Combat/instance/restriction pause
+    Report.lua             -- Forever only (Camelot TOC): /gc report, debug ring buffer
     Favorites.lua          -- Bookmark system
     Tooltip.lua            -- Item tooltip injection
     MinimapButton.lua      -- LDB minimap icon
@@ -154,12 +155,13 @@ Run the regression tests from the repository root under PUC Lua 5.1 before every
 lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read floor
 lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster names
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
+lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
 ```
 
 Each exits non-zero on a failure. They stub WoW APIs and don't exercise the game client or
 transport. In-game procedures are in `docs/testing.md`.
 
-`.github/workflows/ci.yml` runs the lint and all three suites on every PR; `main` requires its
+`.github/workflows/ci.yml` runs the lint and all four suites on every PR; `main` requires its
 `test` check. Declare any new WoW global in `GuildCrafts/.luacheckrc` `read_globals`.
 
 Modules capture WoW globals as locals at load (`local GetNumSkillLines = GetNumSkillLines`).

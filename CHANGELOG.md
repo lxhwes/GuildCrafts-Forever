@@ -7,6 +7,7 @@
   ### New features
 
   - **WoW Forever support** — new `GuildCrafts_Camelot.toc` (Interface 16001, beta). Forever reads the `_Camelot` suffix and prefers it over the unsuffixed TOC; the file carries the CurseForge project ID and takes its version from the packager. Forever runs the Mainline API, so item, spell, and recipe lookups now fall back to `C_Item`, `C_SpellBook`, and `C_TradeSkillUI.GetRecipeSchematic` where the Classic globals are gone. Guild chat messages delivered as secret values are ignored by `!gc`.
+  - **`/gc report`** — opens a copy box with a diagnostic report for bug reports: version, client build, your member and guild keys, per-profession recipe counts, sync role and term, addon users, the addon prefix registration result, time since the last addon message, pause and restriction state, and the last 200 debug lines. Debug lines are now kept per character even with debug mode off, so the report has history after a `/reload`. Forever only.
 
   ### Improvements
 

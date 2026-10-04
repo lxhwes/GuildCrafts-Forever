@@ -17,6 +17,7 @@ Modules\Data.lua
 Modules\ForeverIdentity.lua
 Modules\SyncPausePolicy.lua
 Modules\Comms.lua
+Modules\Report.lua
 Modules\Favorites.lua
 Modules\Tooltip.lua
 Modules\MinimapButton.lua

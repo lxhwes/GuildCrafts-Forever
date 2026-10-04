@@ -80,7 +80,7 @@ read_globals = {
     "GetAddOnMemoryUsage", "UpdateAddOnMemoryUsage",
     "GetBuildInfo", "GetItemInfo", "IsMouseButtonDown", "IsShiftKeyDown", "IsSpellKnown",
     "UnitName", "GetRealmName", "ReloadUI",
-    "time",
+    "time", "date",
 
     -- Ace3 / Libraries
     "LibStub",
