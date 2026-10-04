@@ -746,7 +746,10 @@ end
 function Data:DetectProfessions()
     local playerKey = self:GetPlayerKey()
     local entry = self:GetMemberEntry(playerKey, true)
-    if not entry then return end
+    if not entry then
+        GuildCrafts:Debug("DetectProfessions: no guild database yet (guild key", tostring(self:GetGuildKey()), ")")
+        return
+    end
 
     -- Always clear absent marker on self — we are definitively online
     if entry._absentSince then entry._absentSince = nil end
@@ -1595,19 +1598,47 @@ local function GetRecipeReagentList(recipeID, schematic)
     return reagents
 end
 
-function Data:ScanTradeSkillModern()
+-- Consecutive scan retries before giving up. Each event-triggered scan starts a
+-- fresh budget, so a stuck read can't loop (or flood the debug log) forever.
+local SCAN_RETRY_LIMIT = 10
+
+--- Retry the modern scan after delay, with one retry pending at a time.
+function Data:RetryModernScan(delay, reason)
+    if self._scanRetryPending then return end
+    self._scanRetries = (self._scanRetries or 0) + 1
+    if self._scanRetries > SCAN_RETRY_LIMIT then
+        GuildCrafts:Debug("ScanTradeSkillModern: giving up after", SCAN_RETRY_LIMIT, "retries:", reason)
+        self._scanRetries = 0
+        return
+    end
+    GuildCrafts:Debug("ScanTradeSkillModern:", reason, "- retry", self._scanRetries, "in", delay .. "s")
+    self._scanRetryPending = true
+    self:ScheduleTimer(function()
+        self._scanRetryPending = false
+        self:ScanTradeSkillModern(true)
+    end, delay)
+end
+
+--- isRetry is true only for RetryModernScan's timer; any other call is a fresh scan.
+function Data:ScanTradeSkillModern(isRetry)
+    if not isRetry then self._scanRetries = 0 end
     if not C_TradeSkillUI then
         GuildCrafts:Debug("ScanTradeSkillModern: C_TradeSkillUI is nil")
         return
     end
     if C_TradeSkillUI.IsTradeSkillReady and not C_TradeSkillUI.IsTradeSkillReady() then
-        GuildCrafts:Debug("ScanTradeSkillModern: IsTradeSkillReady() = false, retrying in 1s")
-        self:ScheduleTimer("ScanTradeSkillModern", 1)
+        self:RetryModernScan(1, "IsTradeSkillReady() = false")
         return
     end
     -- Don't scan linked/NPC tradeskills — they aren't ours
-    if C_TradeSkillUI.IsTradeSkillLinked and C_TradeSkillUI.IsTradeSkillLinked() then return end
-    if C_TradeSkillUI.IsNPCCrafting and C_TradeSkillUI.IsNPCCrafting() then return end
+    if C_TradeSkillUI.IsTradeSkillLinked and C_TradeSkillUI.IsTradeSkillLinked() then
+        GuildCrafts:Debug("ScanTradeSkillModern: skipped a linked profession view")
+        return
+    end
+    if C_TradeSkillUI.IsNPCCrafting and C_TradeSkillUI.IsNPCCrafting() then
+        GuildCrafts:Debug("ScanTradeSkillModern: skipped an NPC crafting view")
+        return
+    end
 
     local profInfo = C_TradeSkillUI.GetBaseProfessionInfo()
     if not profInfo then
@@ -1630,7 +1661,11 @@ function Data:ScanTradeSkillModern()
 
     local playerKey = self:GetPlayerKey()
     local entry = self:GetMemberEntry(playerKey, true)
-    if not entry then return end
+    if not entry then
+        GuildCrafts:Debug("ScanTradeSkillModern: no guild database yet (guild key",
+            tostring(self:GetGuildKey()), ") — skipped", profName)
+        return
+    end
     local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
@@ -1649,8 +1684,7 @@ function Data:ScanTradeSkillModern()
 
     local recipeIDs = C_TradeSkillUI.GetAllRecipeIDs()
     if not recipeIDs or #recipeIDs == 0 then
-        GuildCrafts:Debug("ScanTradeSkillModern: GetAllRecipeIDs() empty for", profName, "— retrying in 1s")
-        self:ScheduleTimer("ScanTradeSkillModern", 1)
+        self:RetryModernScan(1, "GetAllRecipeIDs() empty for " .. profName)
         return
     end
 
@@ -1661,19 +1695,21 @@ function Data:ScanTradeSkillModern()
         local existingCount = 0
         for _ in pairs(recipes) do existingCount = existingCount + 1 end
         if existingCount > 0 and #recipeIDs < (existingCount * 0.5) then
-            GuildCrafts:Debug("ScanTradeSkillModern: partial-scan guard triggered for", profName,
-                "(recipeIDs", #recipeIDs, "< 50% of existing", existingCount, ") — deferring 2s")
-            self:ScheduleTimer("ScanTradeSkillModern", 2)
+            self:RetryModernScan(2, string.format("partial-scan guard for %s (%d recipe IDs < 50%% of %d stored)",
+                profName, #recipeIDs, existingCount))
             return
         end
     end
+    self._scanRetries = 0
 
     local newCount = 0
+    local learnedCount = 0
     local newRecipes = {}
 
     for _, recipeID in ipairs(recipeIDs) do
         local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
         if info and info.learned then
+            learnedCount = learnedCount + 1
             local schematic = GetRecipeSchematic(recipeID)
             local key = GetRecipeOutputItemID(recipeID, schematic) or -recipeID
 
@@ -1700,6 +1736,8 @@ function Data:ScanTradeSkillModern()
         end
     end
 
+    GuildCrafts:Debug(string.format("ScanTradeSkillModern: %s: %d recipe IDs, %d learned, %d new",
+        profName, #recipeIDs, learnedCount, newCount))
     local changed = newCount > 0
     if newCount > 0 then
         AdvanceRevision(entry, profName)
@@ -1721,7 +1759,6 @@ function Data:ScanTradeSkillModern()
         if ageAtScanStart >= TOUCH_BROADCAST_THRESHOLD and GuildCrafts.Comms and GuildCrafts.Comms.BroadcastTimestampTouch then
             GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName)
         end
-        GuildCrafts:Debug("Scanned " .. profName .. ": no new recipes.")
     end
 
     return changed

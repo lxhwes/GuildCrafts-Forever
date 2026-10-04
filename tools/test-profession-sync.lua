@@ -6,6 +6,8 @@ local db = {}
 local messages = {}
 local playerKey = "Owner-Realm"
 local skillLines = {}
+local debugs = {}
+local timers = {}
 
 time = function() return now end
 GetRealmName = function() return "Realm" end
@@ -29,7 +31,11 @@ LibStub = function() return nil end
 GuildCrafts = {
     DATA_FORMAT_VERSION = 3,
     NewModule = function() return {} end,
-    Debug = function() end,
+    Debug = function(_, ...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        debugs[#debugs + 1] = table.concat(parts, " ")
+    end,
     Print = function(_, text) messages[#messages + 1] = text end,
     Printf = function(_, format, ...)
         messages[#messages + 1] = string.format(format, ...)
@@ -40,7 +46,10 @@ dofile("GuildCrafts/Modules/Comms.lua")
 local Data, Comms = GuildCrafts.Data, GuildCrafts.Comms
 Data.GetGuildDB = function() return db end
 Data.GetPlayerKey = function() return playerKey end
-Data.ScheduleTimer = function() end
+Data.GetGuildKey = function() return nil end
+Data.ScheduleTimer = function(_, fn, delay)
+    timers[#timers + 1] = { fn = fn, delay = delay }
+end
 Data.db = { global = {} }
 Comms.TouchAddonUser = function() end
 Comms.ProcessNextSyncQueue = function() end
@@ -72,6 +81,8 @@ local function reset()
     skillLines = {}
     classicSkillLines()
     Data._currentProfs, Data._dropHinted, Data._detectRetries = nil, nil, nil
+    Data._scanRetries, Data._scanRetryPending = nil, nil
+    debugs, timers = {}, {}
     Data.db.global = {}
     C_TradeSkillUI = nil
 end
@@ -461,6 +472,110 @@ test("restore adopts a newer drop revision from the peer copy", function()
     Data:MergeIncoming({ [playerKey] = entry({ Alchemy = profession(5, 0, 990) }, 990, { Alchemy = 700 }) })
     assert(count(db[playerKey].professions.Alchemy) == 5)
     assert(db[playerKey].dropped and db[playerKey].dropped.Alchemy == 700, "drop history not adopted")
+end)
+
+-- H6: every scan early-exit leaves a reason in the debug log (#9).
+local function logged(needle)
+    for _, line in ipairs(debugs) do
+        if line:find(needle, 1, true) then return true end
+    end
+    return false
+end
+local function tradeSkill(overrides)
+    C_TradeSkillUI = {
+        GetBaseProfessionInfo = function()
+            return { professionName = "Alchemy", skillLevel = 1, maxSkillLevel = 75 }
+        end,
+        GetAllRecipeIDs = function() return { 201, 202, 203 } end,
+        GetRecipeInfo = function(id) return { learned = id ~= 203, name = "Recipe " .. id } end,
+    }
+    for k, v in pairs(overrides or {}) do C_TradeSkillUI[k] = v end
+end
+
+test("linked and NPC views log why they were skipped", function()
+    tradeSkill({ IsTradeSkillLinked = function() return true end })
+    Data:ScanTradeSkillModern()
+    assert(logged("linked"), "no reason for a linked view")
+    tradeSkill({ IsNPCCrafting = function() return true end })
+    Data:ScanTradeSkillModern()
+    assert(logged("NPC"), "no reason for an NPC view")
+    assert(not db[playerKey], "a skipped view stored data")
+end)
+
+test("a scan without a guild database logs why", function()
+    tradeSkill()
+    local original = Data.GetGuildDB
+    Data.GetGuildDB = function() return nil end
+    local ok, err = pcall(function()
+        Data:ScanTradeSkillModern()
+        Data:DetectProfessions()
+    end)
+    Data.GetGuildDB = original
+    assert(ok, err)
+    assert(logged("ScanTradeSkillModern: no guild database"), "scan exit not logged")
+    assert(logged("DetectProfessions: no guild database"), "detect exit not logged")
+end)
+
+test("a finished scan logs recipe ID, learned and new counts", function()
+    tradeSkill()
+    Data:ScanTradeSkillModern()
+    assert(logged("Alchemy: 3 recipe IDs, 2 learned, 2 new"), "counts missing: " .. table.concat(debugs, " | "))
+    Data:ScanTradeSkillModern()
+    assert(logged("Alchemy: 3 recipe IDs, 2 learned, 0 new"), "no-op scan counts missing")
+end)
+
+test("an unchanged rescan logs one line, the same each time", function()
+    tradeSkill()
+    Data:ScanTradeSkillModern()
+    debugs = {}
+    Data:ScanTradeSkillModern()
+    local first = debugs
+    debugs = {}
+    Data:ScanTradeSkillModern()
+    assert(#first == 1, "unchanged rescan logged " .. #first .. " lines: " .. table.concat(first, " | "))
+    assert(#debugs == 1 and debugs[1] == first[1], "rescans logged different lines, so they can't collapse")
+end)
+
+test("scan retries keep one timer pending and give up with a reason", function()
+    tradeSkill({ IsTradeSkillReady = function() return false end })
+    for _ = 1, 5 do Data:ScanTradeSkillModern() end
+    assert(#timers == 1, "pending retries " .. #timers)
+    local fired = 0
+    while #timers > 0 and fired < 50 do
+        local timer = table.remove(timers, 1)
+        timer.fn()
+        fired = fired + 1
+    end
+    assert(#timers == 0, "retries never stopped")
+    -- The last event resets the budget while one retry is already pending: 10 + 1.
+    assert(fired <= 11, "retried " .. fired .. " times")
+    assert(logged("giving up"), "give-up not logged")
+end)
+
+test("empty recipe IDs retry with a reason and then give up", function()
+    tradeSkill({ GetAllRecipeIDs = function() return {} end })
+    Data:ScanTradeSkillModern()
+    assert(logged("GetAllRecipeIDs() empty"), "empty read not logged")
+    while #timers > 0 do table.remove(timers, 1).fn() end
+    assert(logged("giving up"), "give-up not logged")
+end)
+
+test("an event-triggered scan starts with a full retry budget", function()
+    tradeSkill({ GetAllRecipeIDs = function() return {} end })
+    Data._scanRetries = 10  -- left over from an earlier view that exited without retrying
+    Data:ScanTradeSkillModern()
+    assert(#timers == 1, "a fresh scan inherited an exhausted retry budget")
+    assert(not logged("giving up"), "gave up on a fresh scan")
+end)
+
+test("a successful scan resets the retry budget", function()
+    local ready = false
+    tradeSkill({ IsTradeSkillReady = function() return ready end })
+    Data:ScanTradeSkillModern()
+    table.remove(timers, 1).fn()
+    ready = true
+    table.remove(timers, 1).fn()
+    assert(#timers == 0 and (Data._scanRetries or 0) == 0, "retry budget not reset")
 end)
 
 local failed = 0

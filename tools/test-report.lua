@@ -202,6 +202,29 @@ test("only messages from a resolved peer count as received", function()
     has(Report:Build(), "Last message received: never")
 end)
 
+test("repeated identical lines collapse into one with a count", function()
+    GuildCrafts:Debug("Scanned Alchemy: no new recipes.")
+    local before = #Report:GetLogLines()
+    for _ = 1, 4 do GuildCrafts:Debug("Scanned Alchemy: no new recipes.") end
+    local lines = Report:GetLogLines()
+    assert(#lines == before, "repeats took " .. (#lines - before) .. " extra line(s)")
+    assert(lines[#lines]:find("Scanned Alchemy: no new recipes. (x5)", 1, true), "count missing: " .. lines[#lines])
+    GuildCrafts:Debug("something else")
+    lines = Report:GetLogLines()
+    assert(lines[#lines]:find("something else$"), "a new line was folded into the repeat")
+end)
+
+test("failed sends are logged and counted", function()
+    Comms.Serialize = function() return "x" end
+    Comms.SendCommMessage = function(_, _, _, _, _, _, callback, arg)
+        callback(arg, 1, 1, false)
+    end
+    Comms:SendMessage("HELLO", {}, "GUILD")
+    local text = Report:Build()
+    has(text, "Send failures: 1")
+    has(table.concat(Report:GetLogLines(), "\n"), "Send failed: HELLO GUILD")
+end)
+
 test("a failing section is reported and the rest still builds", function()
     Data.GetGuildDB = function() error("db exploded") end
     local ok, text = pcall(Report.Build, Report)
