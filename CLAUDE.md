@@ -142,6 +142,7 @@ Run the regression tests from the repository root under PUC Lua 5.1 before every
 `luacheck` live alongside it).
 
 ```bash
+(cd GuildCrafts && luacheck .)          # must report 0 warnings; CI fails on any
 lua5.1 tools/test-profession-sync.lua   # profession drop/relearn and empty-read floor
 lua5.1 tools/test-forever-identity.lua  # Forever GUID member keys and roster names
 lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line gate
@@ -149,6 +150,13 @@ lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line g
 
 Each exits non-zero on a failure. They stub WoW APIs and don't exercise the game client or
 transport. In-game procedures are in `docs/testing.md`.
+
+`.github/workflows/ci.yml` runs the lint and all three suites on every PR; `main` requires its
+`test` check. Declare any new WoW global in `GuildCrafts/.luacheckrc` `read_globals`.
+
+Modules capture WoW globals as locals at load (`local GetNumSkillLines = GetNumSkillLines`).
+To test a client that lacks an API, nil the global and `dofile` a fresh copy of the module
+(see the Forever empty-read case in `tools/test-profession-sync.lua`).
 
 ---
 
