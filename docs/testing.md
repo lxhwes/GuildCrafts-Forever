@@ -253,7 +253,7 @@ requester is not the DR.
 | C1 | requester | Log out. Move the account's `SavedVariables/GuildCrafts.lua` (and `.lua.bak`) out of the Forever `WTF` folder | — |
 | C2 | DR | `/gc debug` | `Debug mode: ON` |
 | C3 | requester | Log in, `/gc debug` at once. Wait 2 minutes | DR: `Handling SYNC_REQUEST from <R>`, `SendChunked started: SYNC_RESPONSE → <R> <n> chunk(s)` with n of 2 or more, then `Sent chunk <i> / <n>` for each chunk. Requester: `Received SYNC_RESPONSE chunk <i> / <n>` for every i |
-| C4 | requester | `/gc dump` | `Total` members equals the DR's M, less one if the DR holds an entry for the requester (your own entry is never restored from peers, H11) |
+| C4 | requester | `/gc dump` | `Total` members equals the DR's M, less one if the DR holds an entry for the requester. Your own entry is never replaced from peers; since H11 only known professions with no recipes are filled from the DR's copy |
 
 **Fail:** a chunk never arrives and the requester shows no `RESUME:` line, or C4's member
 count is short by more than that one.

@@ -238,8 +238,9 @@ remove it for the guild. If you still know it, ignore the message.
 - It also clears the minimap button position and the `[Online]` and `[Tooltip]` settings,
   which live in `GuildCraftsDB`.
 - Favorites survive. They're in the per-character `GuildCraftsCharDB`.
-- It doesn't rescan. Your own recipes stay empty until you open each profession window again.
-  Guildmates' copies of your recipes aren't merged back into your own entry yet (H11).
+- It doesn't rescan. At the next sync, GuildCrafts copies your recipes back from the guild's
+  copy for each profession you still know, and prints `Restored <n> <profession> recipes`. This
+  needs a DR running this version. Open each profession window to rescan anything newer.
 - Other members' data comes back from other GuildCrafts users when you sync.
 
 If the UI doesn't reload (F14), type `/reload` yourself.

@@ -1822,6 +1822,68 @@ function Data:GetPlayerProfCounts()
 end
 
 ----------------------------------------------------------------------
+-- Own-data restore (H11)
+-- Your own entry is never merged from peers, so a client that starts with
+-- empty SavedVariables used to stay empty until every profession window
+-- was reopened. It now asks for its own entry (SYNC_REQUEST restoreOwn)
+-- and fills only professions it still knows that hold no recipes.
+----------------------------------------------------------------------
+
+--- Professions this character still knows whose stored recipes are empty.
+--- Herbalism and Skinning have no recipes, so they never count.
+function Data:GetOwnProfessionsToRestore()
+    local missing = {}
+    if not self._currentProfs then return missing end
+    local entry = self:GetMemberEntry(self:GetPlayerKey(), false)
+    for profName in pairs(self._currentProfs) do
+        local prof = entry and entry.professions and entry.professions[profName]
+        if not self:IsGatheringProfession(profName) and not (prof and next(prof.recipes or {})) then
+            missing[#missing + 1] = profName
+        end
+    end
+    table.sort(missing)
+    return missing
+end
+
+function Data:NeedsOwnRestore()
+    return #self:GetOwnProfessionsToRestore() > 0
+end
+
+--- Fill your own recipe-less, still-known professions from a peer's copy of
+--- your entry. Never removes or replaces anything, and never advances your
+--- revision. Returns true if any recipes were restored.
+function Data:RestoreOwnProfessions(localEntry, incomingEntry)
+    if not localEntry or type(incomingEntry) ~= "table" or incomingEntry._tombstone then
+        return false
+    end
+    local restored = false
+    for _, profName in ipairs(self:GetOwnProfessionsToRestore()) do
+        local incomingProf = incomingEntry.professions and incomingEntry.professions[profName]
+        local incomingDrop = DropRevision(incomingEntry, profName)
+        -- A copy older than our own drop of this profession holds pre-drop recipes.
+        if incomingProf and next(incomingProf.recipes or {})
+                and incomingDrop >= DropRevision(localEntry, profName) then
+            localEntry.professions = localEntry.professions or {}
+            local localProf = localEntry.professions[profName] or {}
+            localProf.recipes = incomingProf.recipes
+            localProf.specialisation = localProf.specialisation or incomingProf.specialisation
+            localProf.lastUpdate = localProf.lastUpdate or incomingProf.lastUpdate
+            localEntry.professions[profName] = localProf
+            if incomingDrop > DropRevision(localEntry, profName) then
+                localEntry.dropped = localEntry.dropped or {}
+                localEntry.dropped[profName] = incomingDrop
+            end
+            local n = 0
+            for _ in pairs(localProf.recipes) do n = n + 1 end
+            GuildCrafts:Printf("Restored %d %s recipes from the guild's copy.", n, profName)
+            restored = true
+        end
+    end
+    if restored then self:ExtractToRecipeDB(localEntry) end
+    return restored
+end
+
+----------------------------------------------------------------------
 -- Data Merging
 ----------------------------------------------------------------------
 
@@ -1838,9 +1900,14 @@ function Data:MergeIncoming(incomingData)
             local memberKey = self:NormalizeMemberKey(rawMemberKey) or rawMemberKey
             -- Never overwrite our own data — we're always authoritative
             -- for ourselves (local scans have reagents/cooldowns that
-            -- sync payloads strip out)
+            -- sync payloads strip out). Only empty, still-known professions
+            -- are filled from a peer's copy.
             if memberKey == playerKey then
-                GuildCrafts:Debug("Skipped merge for own data:", memberKey)
+                if self:RestoreOwnProfessions(gdb[memberKey], incomingEntry) then
+                    changed = true
+                else
+                    GuildCrafts:Debug("Skipped merge for own data:", memberKey)
+                end
             else
                 local localEntry = gdb[memberKey]
 
