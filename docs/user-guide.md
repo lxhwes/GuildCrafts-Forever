@@ -149,7 +149,7 @@ The reply hasn't been confirmed on Forever yet (H14).
 | `/gc mem` | Prints how much memory GuildCrafts is using |
 | `/gc minimap` | Shows or hides the minimap button |
 | `/gc drop <profession>` | Removes one of your stored professions and its recipes, and tells the guild. Use it only after unlearning the profession |
-| `/gc reset` | Deletes `GuildCraftsDB` and reloads the UI. See [Troubleshooting](#troubleshooting) before using it |
+| `/gc reset` | Clears every guild's members and recipes, keeps your settings and favorites, and reloads the UI. See [Troubleshooting](#troubleshooting) before using it |
 
 Any other text after `/gc` prints the command list.
 
@@ -202,8 +202,6 @@ These are open in the current beta build. Each has a plan ID.
   nobody answers.
 - An empty search result doesn't prove nobody in the guild knows a recipe. The database only
   holds GuildCrafts users who have opened their profession windows.
-- `/gc reset` reloads the UI with `ReloadUI()`, which is reported to be blocked for addons on
-  Forever. This is unverified (F14; H7).
 
 ## Troubleshooting
 
@@ -228,18 +226,19 @@ remove it for the guild. If you still know it, ignore the message.
 
 ### What `/gc reset` does
 
-`/gc reset` sets `GuildCraftsDB` to nil and reloads the UI.
+`/gc reset` clears GuildCrafts' guild data and reloads the UI. It prints what it cleared and
+what it kept.
 
-- It deletes all recipe data stored on this account, for every guild.
-- It also clears the minimap button position and the `[Online]` and `[Tooltip]` settings,
-  which live in `GuildCraftsDB`.
-- Favorites survive. They're in the per-character `GuildCraftsCharDB`.
+- It deletes every member, recipe and sync record stored on this account, for every guild,
+  and the shared recipe cache.
+- Your settings survive: the minimap button and its position, and the `[Online]` and
+  `[Tooltip]` toggles.
+- Favorites and the `/gc report` debug log survive. They're in the per-character
+  `GuildCraftsCharDB`, which reset never touches.
 - It doesn't rescan. At the next sync, GuildCrafts copies your recipes back from the guild's
   copy for each profession you still know, and prints `Restored <n> <profession> recipes`. This
   needs a DR running this version. Open each profession window to rescan anything newer.
 - Other members' data comes back from other GuildCrafts users when you sync.
-
-If the UI doesn't reload (F14), type `/reload` yourself.
 
 ## Reporting a bug
 

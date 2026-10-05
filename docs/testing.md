@@ -277,8 +277,8 @@ so RESUME can fire after 4s and resend chunks that were still in flight. Duplica
 `Received SYNC_RESPONSE chunk` lines are that known gap. The test passes if C4 passes.
 
 Evidence: all `Sent chunk`, `Received SYNC_RESPONSE chunk` and `RESUME:` lines, and both
-dumps. Don't use `/gc reset` for C1: it calls `ReloadUI()`, which may be protected on Forever
-(F14, H7).
+dumps. `/gc reset` on the requester also works for C1: it clears every member and recipe and
+reloads the UI. Type C3's `/gc debug` straight after the reload.
 
 ### R — Restriction pause and recovery
 

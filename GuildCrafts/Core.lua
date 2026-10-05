@@ -515,8 +515,13 @@ function GuildCrafts:SlashHandler(input)
         local mem = GetAddOnMemoryUsage(ADDON_NAME)
         self:Printf("Memory: %.1f KB (%.2f MB)", mem, mem / 1024)
     elseif input == "reset" then
-        self:Print("Wiping all SavedVariables and reloading...")
-        GuildCraftsDB = nil
+        if not self.Data then
+            self:Print("Data module not loaded.")
+            return
+        end
+        self.Data:ResetData()
+        self:Print("Cleared all guild members, recipes and sync data. "
+            .. "Kept your settings (minimap button, Online filter, Tooltip crafters) and favorites. Reloading...")
         ReloadUI()
     elseif input == "drop" or input:match("^drop%s") then
         if self.Data then

@@ -1,10 +1,11 @@
--- /gc report and debug ring buffer regressions (Modules/Report.lua) with stubbed WoW APIs.
+-- /gc report, debug ring buffer and /gc reset regressions with stubbed WoW APIs.
 -- Run from the repository root: lua5.1 tools/test-report.lua
 local now = 1000
 local printed = {}
 local frames = {}
 local prefixResult = 0
 local me = "Player-4619-012F81BC"
+local reloads = 0
 
 time = function() return now end
 date = function(format) return os.date(format, now) end
@@ -18,6 +19,7 @@ string.trim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
 Enum = { RegisterAddonMessagePrefixResult = { Success = 0, DuplicatePrefix = 1, InvalidPrefix = 2, MaxPrefixes = 3 } }
 C_ChatInfo = { RegisterAddonMessagePrefix = function() return prefixResult end }
 C_AddOns = { GetAddOnMetadata = function() return "@project-version@" end }
+ReloadUI = function() reloads = reloads + 1 end
 
 -- Frames: every method is a no-op except the ones the copy box reads back.
 local frameStub
@@ -71,7 +73,7 @@ Data.NormalizeMemberKey = function(_, key) return key == "Motiv Hysteria" and "P
 Data.db = { global = {} }
 
 local function reset()
-    now, printed, frames, prefixResult = 1000, {}, {}, 0
+    now, printed, frames, prefixResult, reloads = 1000, {}, {}, 0, 0
     GuildCraftsCharDB = nil
     GuildCrafts.debugMode = false
     db = {
@@ -248,6 +250,80 @@ test("/gc report opens a copy box holding the report", function()
     for _, f in ipairs(frames) do local t = rawget(f, "text"); if t and t:find("Addon: ", 1, true) then edit = f end end
     assert(edit, "no edit box received the report")
     assert(#printed == 0, "report spilled into chat: " .. tostring(printed[1]))
+end)
+
+local function copy(t)
+    if type(t) ~= "table" then return t end
+    local c = {}
+    for k, v in pairs(t) do c[k] = copy(v) end
+    return c
+end
+
+local function same(a, b, path)
+    path = path or "value"
+    if type(a) ~= "table" or type(b) ~= "table" then
+        assert(a == b, path .. ": " .. tostring(a) .. " ~= " .. tostring(b))
+        return
+    end
+    for k, v in pairs(a) do same(v, b[k], path .. "." .. tostring(k)) end
+    for k in pairs(b) do assert(a[k] ~= nil, path .. "." .. tostring(k) .. " was added") end
+end
+
+-- Raw SavedVariables as AceDB-3.0 lays them out, with Data.db pointing into them.
+local function savedVariables()
+    GuildCraftsDB = {
+        global = {
+            minimap = { hide = true, minimapPos = 200, lock = true },
+            _recipeDB = { [4] = { name = "Feast", reagents = { { 1, 2 } } } },
+            ["Grim-Realm"] = {
+                [me] = { lastUpdate = 900, professions = { Alchemy = { recipes = { [1] = {} } } } },
+                ["Player-1-AA"] = { lastUpdate = 950, _tombstone = 940 },
+            },
+            ["Other Guild-Realm"] = { ["Player-1-BB"] = { lastUpdate = 10, professions = {} } },
+            ["Legacy-Realm"] = { lastUpdate = 5, professions = {} },
+        },
+        profileKeys = { ["Geo Prizm - Realm"] = "Default" },
+        profiles = { Default = { showOnlineOnly = true, showTooltipCrafters = false, expansionFilter = { ORIG = false } } },
+    }
+    Data.db = { global = GuildCraftsDB.global, profile = GuildCraftsDB.profiles.Default }
+    GuildCrafts.db = Data.db
+    GuildCraftsCharDB.favoriteRecipes = { [4] = 1 }
+    GuildCraftsCharDB.favoriteMembers = { ["Player-1-AA"] = 1 }
+    GuildCraftsCharDB.optOut = 1
+    GuildCrafts:Debug("before reset")
+end
+
+test("/gc reset clears guild, recipe and sync data", function()
+    savedVariables()
+    local global = GuildCraftsDB.global
+    GuildCrafts:SlashHandler("reset")
+    assert(GuildCraftsDB and GuildCraftsDB.global == global, "GuildCraftsDB.global was replaced, AceDB would lose it")
+    assert(Data.db.global == global, "Data.db.global no longer points at the saved table")
+    for key in pairs(global) do
+        assert(key == "minimap", "reset left " .. tostring(key))
+    end
+    assert(reloads == 1, "ReloadUI called " .. reloads .. " times")
+end)
+
+test("/gc reset keeps every setting, favorites and the debug log", function()
+    savedVariables()
+    local minimap, profiles, profileKeys = copy(GuildCraftsDB.global.minimap), copy(GuildCraftsDB.profiles), copy(GuildCraftsDB.profileKeys)
+    local charDB, charTable = copy(GuildCraftsCharDB), GuildCraftsCharDB
+    GuildCrafts:SlashHandler("reset")
+    same(GuildCraftsDB.global.minimap, minimap, "minimap")
+    same(GuildCraftsDB.profiles, profiles, "profiles")
+    same(GuildCraftsDB.profileKeys, profileKeys, "profileKeys")
+    assert(GuildCraftsCharDB == charTable, "GuildCraftsCharDB was replaced")
+    same(GuildCraftsCharDB, charDB, "GuildCraftsCharDB")
+end)
+
+test("/gc reset says what it cleared and that settings were kept", function()
+    savedVariables()
+    GuildCrafts:SlashHandler("reset")
+    local text = table.concat(printed, "\n")
+    has(text, "Cleared all guild members, recipes and sync data")
+    has(text, "Kept your settings (minimap button, Online filter, Tooltip crafters) and favorites")
+    has(text, "Reloading")
 end)
 
 local failed = 0
