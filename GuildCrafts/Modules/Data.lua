@@ -35,6 +35,7 @@ local GetCraftReagentItemLink = GetCraftReagentItemLink
 -- Cooldown APIs
 local GetTradeSkillCooldown = GetTradeSkillCooldown
 local GetCraftCooldown = GetCraftCooldown
+local GetServerTime = GetServerTime
 local time = time
 local pairs = pairs
 local tonumber = tonumber
@@ -104,6 +105,39 @@ local STALE_DISPLAY_THRESHOLD   = 30 * 24 * 3600  -- show [Nd ago] tag; CountSta
 local EX_GUILD_GRACE_PERIOD     =  7 * 24 * 3600  -- prune ex-members after 7 days absent
 local INACTIVE_MEMBER_THRESHOLD = 45 * 24 * 3600  -- prune still-in-guild members with no scan in 45 days
 local TOUCH_BROADCAST_THRESHOLD = 25 * 24 * 3600  -- broadcast timestamp touch only when data is 25+ days old
+-- Covers same-second revision bumps and an unsynced PC clock on the time() fallback.
+local MAX_CLOCK_AHEAD           = 300
+
+----------------------------------------------------------------------
+-- Revision clock (H2)
+-- Revisions are compared across clients, so they use the realm clock.
+-- Clients without GetServerTime fall back to the local clock.
+----------------------------------------------------------------------
+
+local function Now()
+    return GetServerTime and GetServerTime() or time()
+end
+
+-- Far-future stamps come from a broken clock. They're refused, not clamped:
+-- clamping rewrites each revision by arrival time, which reorders them.
+-- Only the realm clock can judge; a local fallback clock may itself be slow.
+local function IsFutureStamp(stamp)
+    return GetServerTime ~= nil and type(stamp) == "number" and stamp > Now() + MAX_CLOCK_AHEAD
+end
+
+local function HasFutureStamp(entry)
+    if IsFutureStamp(entry.lastUpdate) then return true end
+    for _, revision in pairs(type(entry.dropped) == "table" and entry.dropped or {}) do
+        if IsFutureStamp(revision) then return true end
+    end
+    for _, profData in pairs(type(entry.professions) == "table" and entry.professions or {}) do
+        if type(profData) == "table" and IsFutureStamp(profData.lastUpdate) then return true end
+    end
+    return false
+end
+
+function Data:Now() return Now() end
+function Data:IsFutureStamp(stamp) return IsFutureStamp(stamp) end
 
 -- Crafting professions we track (canonical English keys)
 local TRACKED_PROFESSIONS = {
@@ -698,7 +732,7 @@ end
 
 -- Keep mutations ordered even when the wall clock has not advanced.
 local function AdvanceRevision(entry, profName)
-    entry.lastUpdate = math.max(time(), (entry.lastUpdate or 0) + 1)
+    entry.lastUpdate = math.max(Now(), (entry.lastUpdate or 0) + 1)
     if profName and entry.professions[profName] then
         entry.professions[profName].lastUpdate = entry.lastUpdate
     end
@@ -823,7 +857,7 @@ function Data:DetectProfessions()
 
     -- Ensure entries exist for current professions and update skill levels
     local dataChanged = false
-    local revision = math.max(time(), (entry.lastUpdate or 0) + 1)
+    local revision = math.max(Now(), (entry.lastUpdate or 0) + 1)
     for profName, _ in pairs(currentProfs) do
         if not entry.professions[profName] then
             entry.professions[profName] = { recipes = {}, lastUpdate = revision }
@@ -1145,7 +1179,7 @@ end
 --- Returns nil if fresh, or a human-readable age string if stale.
 function Data:GetStalenessTag(lastUpdate)
     if not lastUpdate or lastUpdate == 0 then return nil end
-    local age = time() - lastUpdate
+    local age = Now() - lastUpdate
     if age < STALE_DISPLAY_THRESHOLD then return nil end
 
     local days = math.floor(age / 86400)
@@ -1160,7 +1194,7 @@ end
 --- Return the number of member entries whose lastUpdate is older than thresholdDays.
 function Data:CountStaleMembers(thresholdDays)
     local threshold = thresholdDays * 86400
-    local now = time()
+    local now = Now()
     local count = 0
     local db = self:GetGuildDB()
     if not db then return 0 end
@@ -1198,7 +1232,7 @@ function Data:ScanTradeSkill()
     local entry = self:GetMemberEntry(playerKey, true)
     if not entry then return end
     -- Capture age before any processing so backfill cannot poison the threshold check.
-    local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
+    local ageAtScanStart = entry.lastUpdate and (Now() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
         AdvanceRevision(entry, profName)
@@ -1310,7 +1344,7 @@ function Data:ScanTradeSkill()
         -- Always refresh lastUpdate when a profession window is opened, even if
         -- nothing changed. Without this, users who have learned all recipes will
         -- never advance their timestamp and will hit the stale-data warning.
-        entry.lastUpdate = math.max(time(), entry.lastUpdate or 0)
+        entry.lastUpdate = math.max(Now(), entry.lastUpdate or 0)
         entry.professions[profName].lastUpdate = entry.lastUpdate
         -- Only broadcast the timestamp bump when data is approaching the prune
         -- threshold (25–45 days). Avoids spamming the DR on every profession open.
@@ -1405,7 +1439,7 @@ function Data:ScanCraft()
     local entry = self:GetMemberEntry(playerKey, true)
     if not entry then return end
     -- Capture age before any processing so backfill cannot poison the threshold check.
-    local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
+    local ageAtScanStart = entry.lastUpdate and (Now() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
         AdvanceRevision(entry, profName)
@@ -1515,7 +1549,7 @@ function Data:ScanCraft()
         -- Always refresh lastUpdate when a profession window is opened, even if
         -- nothing changed. Without this, users who have learned all recipes will
         -- never advance their timestamp and will hit the stale-data warning.
-        entry.lastUpdate = math.max(time(), entry.lastUpdate or 0)
+        entry.lastUpdate = math.max(Now(), entry.lastUpdate or 0)
         entry.professions[profName].lastUpdate = entry.lastUpdate
         -- Only broadcast the timestamp bump when data is approaching the prune
         -- threshold (25–45 days). Avoids spamming the DR on every profession open.
@@ -1716,7 +1750,7 @@ function Data:ScanTradeSkillModern(isRetry)
             tostring(self:GetGuildKey()), ") — skipped", profName)
         return
     end
-    local ageAtScanStart = entry.lastUpdate and (time() - entry.lastUpdate) or math.huge
+    local ageAtScanStart = entry.lastUpdate and (Now() - entry.lastUpdate) or math.huge
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
         AdvanceRevision(entry, profName)
@@ -1806,7 +1840,7 @@ function Data:ScanTradeSkillModern(isRetry)
             GuildCrafts.Tooltip:InvalidateIndex()
         end
     else
-        entry.lastUpdate = math.max(time(), entry.lastUpdate or 0)
+        entry.lastUpdate = math.max(Now(), entry.lastUpdate or 0)
         entry.professions[profName].lastUpdate = entry.lastUpdate
         if ageAtScanStart >= TOUCH_BROADCAST_THRESHOLD and GuildCrafts.Comms and GuildCrafts.Comms.BroadcastTimestampTouch then
             GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName)
@@ -1985,7 +2019,9 @@ function Data:MergeIncoming(incomingData)
     local changed = false
     local playerKey = self:GetPlayerKey()
     for rawMemberKey, incomingEntry in pairs(incomingData) do
-        if type(incomingEntry) == "table" and incomingEntry.lastUpdate then
+        if type(incomingEntry) == "table" and incomingEntry.lastUpdate and HasFutureStamp(incomingEntry) then
+            GuildCrafts:Debug("MergeIncoming: refused future-stamped entry for", rawMemberKey)
+        elseif type(incomingEntry) == "table" and incomingEntry.lastUpdate then
             local memberKey = self:NormalizeMemberKey(rawMemberKey) or rawMemberKey
             -- Never overwrite our own data — we're always authoritative
             -- for ourselves (local scans have reagents/cooldowns that
@@ -2134,6 +2170,10 @@ function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpda
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
     if not memberKey then return end
+    if IsFutureStamp(newLastUpdate) or IsFutureStamp(dropRevision) then
+        GuildCrafts:Debug("MergeDelta: refused future-stamped delta for", memberKey, profName)
+        return
+    end
 
     -- Reject delta if we have a tombstone that is at least as new.
     -- If the delta is strictly newer, the member re-joined and re-scanned —
@@ -2191,6 +2231,10 @@ function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate)
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
     if not memberKey then return end
+    if IsFutureStamp(newLastUpdate) then
+        GuildCrafts:Debug("MergeProfessionRemoval: refused future-stamped removal for", memberKey, profName)
+        return
+    end
     local entry = self:GetMemberEntry(memberKey, false)
     -- Tombstone entries have no professions; removal is a no-op for them.
     if entry and entry._tombstone then
@@ -2259,7 +2303,7 @@ function Data:PruneRoster()
     local pruned = 0
     local marked = 0
     local restored = 0
-    local now = time()
+    local now = Now()
     local gdb = self:GetGuildDB()
     if not gdb then return end
     local localPlayerKey = self:GetPlayerKey()
