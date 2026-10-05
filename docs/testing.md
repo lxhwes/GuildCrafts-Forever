@@ -72,6 +72,12 @@ folder (all six TOCs). From a package, only the Camelot TOC is present.
 | 7 | Open and close a profession window, then `/gc dump` | Your key on the first line, and a non-zero recipe count for that profession |
 | 8 | In `/gc`, pick that profession, then your name | The same recipes as the dump counted |
 | 9 | `/gc comms` | First line `--- Comms Status (GuildCrafts dev) ---` from a checkout, or the tag version from a package |
+| 10 | With no other addon that bundles ChatThrottleLib enabled, type a few lines in guild chat, then `!gc <a recipe you know>` | Each line posts. No `tainted` or blocked-action error naming ChatThrottleLib or GuildCrafts |
+
+Step 10 answers open question Q6 in `spec/forever-plan.md`, due in wave 1. The v31 taint only
+showed when GuildCrafts' ChatThrottleLib was the copy loaded, hence no other such addon. Record
+the result in `spec/migration-forever.md` and on
+[#28](https://github.com/lxhwes/GuildCrafts-Forever/issues/28).
 
 ---
 
@@ -219,8 +225,8 @@ Prerequisite: B lists A under Prof in `/gc`.
 
 **Fail:** after 2 minutes B still lists A under Prof.
 
-If `/gc drop` prints `Could not read current professions…`, retry after a few seconds. If it
-removes Prof while A still knows it, that's H9, a known gap: record it.
+If `/gc drop` prints `Could not read current professions…`, retry after a few seconds. Since
+H9 an empty read is refused, so if it removes Prof while A still knows it, that's a Fail.
 
 Evidence: A's O2 lines, B's dumps from O1 and O4.
 
@@ -300,3 +306,17 @@ the event never fired on Forever: record that as the answer to Q2, not as a Guil
 failure.
 
 Evidence: every `RE` and `SP` line, A's debug lines from R2 to R9, and B's two R8 dumps.
+
+### I — GUILD messages across an instance boundary
+
+Answers open question Q8 in `spec/forever-plan.md`. `Comms.lua` assumes GUILD addon messages
+don't reach a client inside an instance. This is the R4 probe from `spec/curseforge-audit.md`.
+A must be LOW, so A sends a HEARTBEAT every 60s.
+
+| Step | Who | Do | Expect |
+|---|---|---|---|
+| I1 | B | Enter a dungeon while A stays outside. Wait 3 minutes, then `/gc report` twice, 60s apart | `Last message received:` under 70s ago both times means A's HEARTBEATs reach B inside. A number that keeps climbing means they don't |
+| I2 | A | B leaves. A enters a dungeon, B runs `/gc debug` and waits 5 minutes outside, then `/gc comms` | Still `DR: <A>` with no `DR heartbeat timeout — removing <A>` means A's HEARTBEATs leave the instance. The timeout line means they don't |
+
+Record both results in `spec/migration-forever.md` and on
+[#45](https://github.com/lxhwes/GuildCrafts-Forever/issues/45).

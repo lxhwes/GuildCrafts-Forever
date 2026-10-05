@@ -32,6 +32,14 @@ Run with a profession window open to check the recipe scan inputs: prints profes
 /run local T=C_TradeSkillUI;local p=T.GetBaseProfessionInfo()or{};local d=T.GetAllRecipeIDs()or{};local n=0;for _,r in ipairs(d)do local i=T.GetRecipeInfo(r);n=n+(i and i.learned and 1 or 0);end;print("TS",p.professionName,p.parentProfessionName,#d,n);
 ```
 
+## CAT
+
+Run with a profession window open (H15, F12). First line: whether `C_TradeSkillUI.GetCategoryInfo` exists, whether `GetCategories` ran, how many values it returned, and the first one, or its error. `false … attempt to call a nil value` means `GetCategories` doesn't exist. Then up to three lines: category ID, the type `GetCategoryInfo` returned, and its `name` and `parentCategoryID`. `string nil nil` means the call raised an error. A Lua error after the first line means it returned something other than a table or a string.
+
+```
+/run local T=C_TradeSkillUI;local c=T.GetCategoryInfo;local t={pcall(T.GetCategories)};print("CAT",c~=nil,t[1],#t-1,t[2]);for k=2,c and t[1]and min(#t,4)or 0 do local _,i=pcall(c,t[k]);print("CAT",t[k],type(i),i and i.name,i and i.parentCategoryID);end;
+```
+
 ## EXP
 
 Run anywhere to read the expansion level APIs and client build: prints GetClassicExpansionLevel, GetExpansionLevel, GetServerExpansionLevel, LE_EXPANSION_LEVEL_CURRENT, build version and interface number, with nil for any API that doesn't exist.
@@ -134,7 +142,7 @@ Run in a guild twice, once with the roster's Show Offline Members unchecked and 
 
 ## CHL
 
-Run anywhere. `true`/`false` for whether each chat API exists: global `ChatEdit_InsertLink`, global `ChatFrame_OpenChat`, `ChatFrameUtil.InsertLink`, `ChatFrameUtil.OpenChat`. GuildCrafts' shift-click link and `[W]` button call the first two; `false` there means both error on click.
+Run anywhere. `true`/`false` for whether each chat API exists: global `ChatEdit_InsertLink`, global `ChatFrame_OpenChat`, `ChatFrameUtil.InsertLink`, `ChatFrameUtil.OpenChat`. GuildCrafts' shift-click link and `[W]` button use the `ChatFrameUtil` pair and fall back to the globals. If all four are `false`, both print a message instead of working.
 
 ```
 /run print("CHL",ChatEdit_InsertLink~=nil,ChatFrame_OpenChat~=nil,ChatFrameUtil~=nil and ChatFrameUtil.InsertLink~=nil,ChatFrameUtil~=nil and ChatFrameUtil.OpenChat~=nil);

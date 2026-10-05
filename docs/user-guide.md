@@ -73,7 +73,7 @@ The right panel lists every recipe in the profession that any GuildCrafts user k
   members.
 - Hover the crafter names for the full list.
 - `[W]` opens a whisper to a crafter. With more than one crafter, it shows a list to pick from.
-  See F20 under [Known limitations](#known-limitations) before using it.
+  It hasn't been checked in game yet (see [Known limitations](#known-limitations)).
 - `[G]` posts the crafter list to guild chat. Each recipe can be posted once every 30 seconds.
 
 Herbalism and Skinning don't have a Recipes view. See [Profession coverage](#profession-coverage).
@@ -157,10 +157,8 @@ About `/gc drop`:
 
 - It matches the profession name without regard to case, for example `/gc drop alchemy`.
 - It reads your current professions first. If the profession is still known, it refuses. If
-  the read fails, it asks you to try again.
-- On Forever, an empty profession read currently counts as a successful one. So if the client
-  reports no professions at that moment, `/gc drop` removes the profession even though you
-  still know it. This is tracked as H9.
+  the read fails or comes back empty, it says it couldn't read your professions and asks you
+  to try again.
 - It's the only way to remove a profession that has recipes. If a profession with recipes is
   missing from the client's list at login, GuildCrafts keeps it.
 
@@ -191,8 +189,9 @@ These are open in the current beta build. Each has a plan ID.
   while that's reviewed (C3; H17).
 - Recipes are listed without category headings. The scanner reads a category field Forever
   doesn't provide (F12; H15).
-- The `[W]` whisper button breaks on Forever's two-word names. It builds `/w First Surname`,
-  so the whisper goes to "First" with "Surname" as the start of the message (F20; H14).
+- The `[W]` whisper button and shift-click links use Forever's chat API, and `[W]` sets the
+  two-word name as the whisper target directly. Neither has been checked in game yet (F20, F25;
+  H14).
 - Opening a guildmate's profession from the guild window may file their recipes under your
   name. The scanner skips linked and NPC views, but not Blizzard's guild views (F5; H10).
 - `!gc` replies and `[G]` both send guild chat with `SendChatMessage`. Whether Forever allows
@@ -205,7 +204,6 @@ These are open in the current beta build. Each has a plan ID.
   nobody answers.
 - An empty search result doesn't prove nobody in the guild knows a recipe. The database only
   holds GuildCrafts users who have opened their profession windows.
-- `/gc drop` can remove a profession you still know after an empty profession read (H9).
 - `/gc reset` reloads the UI with `ReloadUI()`, which is reported to be blocked for addons on
   Forever. This is unverified (F14; H7).
 
