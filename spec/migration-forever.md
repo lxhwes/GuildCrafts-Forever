@@ -256,8 +256,9 @@ after load, not whether the addon loads.
   - `GetGuildRosterInfo` returns the GUID as its 17th value (`Player-4619-012F81BC`), which
     matches `UnitGUID("player")`.
   - The guild spans servers: one member's GUID starts `Player-4613-`, the rest `Player-4619-`.
-  - `GetRealmName()` is `Classic Beta PvP`; `GetNormalizedRealmName()` is `ClassicBetaPVP`.
-    GuildCrafts' own normalisation gives `ClassicBetaPvP`, so the two differ in case. Forever
+  - `GetRealmName()` is `Classic Beta PvP`; `GetNormalizedRealmName()` is `ClassicBetaPvP`,
+    the same as GuildCrafts' own normalisation. The 10-02 record had `ClassicBetaPVP`; Alex read
+    `ClassicBetaPvP` off the screen on 2026-10-04. Forever
     has no realms; it is split only by ruleset (PvP or PvE), so `GetRealmName()` names the
     ruleset.
   - **Fixed:** `Modules/ForeverIdentity.lua`, loaded only from the Camelot TOC, keys members by
@@ -303,12 +304,47 @@ after load, not whether the addon loads.
   **Local verification:** `tools/test-profession-sync.lua` passed all 28 checks on Lua
   5.1.5; `luac -p` passed for Core, Data, Comms and the regression script. In-game results
   for these fixes have not been supplied.
-- **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified. Planned
-  as H7.
+- **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever. Disproved in game
+  on 2026-10-04: `RLX` reloaded the UI from insecure code (see "Probe run, 2026-10-04"). What
+  `/gc reset` clears is still open in H7.
 - **Favorites stored booleans. Fixed in H13 (PR #67, issue closed 2026-10-04).**
   `Modules/Favorites.lua` wrote `favoriteRecipes[key] = true` and `favoriteMembers[key] = true`
   to `GuildCraftsCharDB`. It now stores `1`, under the 1/0 rule, and rewrites saved `true`
   entries as `1` at login. `tools/test-favorites.lua` covers it.
+
+---
+
+## Probe run, 2026-10-04
+
+Alex ran the probe set from `docs/ingame-commands.md` on build `1.60.1.70205` and posted the
+output as gist comment 6406829 (2026-10-05 02:22 UTC, 22:22 local on 10-04). Raw lines are quoted
+as posted. The `GTS` function names came back with spaces in them, so at least part of the paste
+was retyped. Citations are against pin `e3ecc27` (`1.60.1.70205`).
+
+Unchanged from 2026-10-02: `GC true @project-version@ 1469206 true true`,
+`TOC 16001 true 2 true true`, `EXP 0 0 0 0 1.60.1 16001`, `SKL false false false true`,
+`SND Geo Prizm`, `RA true true true true false`, `RS` (all six types in state 0), the `PSL`
+list (no Jewelcrafting or Inscription; `Test Profession [DNT]` on 2933 and 2934), and
+`SP false false false false`.
+
+| Probe | Result | What it settles |
+|---|---|---|
+| `TS` | `TS Alchemy nil 197 7` | 7 of 197 Alchemy recipes learned, up from 5 |
+| `PROF` | 1 Alchemy (5), 2 Herbalism (6), 3 First Aid (4), 4 Fishing (8), 5 Cooking (7), 6–7 nil | First Aid and Fishing, learned since 10-02, fill slots 3 and 4 as Forever's ProfessionsBook expects. A test character for H17 now exists |
+| `CAT` | `CAT true true 2 2424`; `2424 table Alchemy nil`; `2592 table SEASON OF DISCOVERY nil` | `GetCategoryInfo` and `GetCategories` exist. Alchemy has two top-level categories, neither with a parent. Which category a recipe resolves to is the `CATR` probe |
+| `ME` | `Geo Prizm Geo Prizm Geo Prizm Player-4619-012F81BC Classic Beta PvP ClassicBetaPvP` | Same as 10-02, except `GetNormalizedRealmName()` reads `ClassicBetaPvP`, checked on screen. The 10-02 record had `ClassicBetaPVP`. Either that was a transcription slip or the client changed; nothing recorded can tell which |
+| `GR` | `GR true 74 Grim`; 8 online, on server prefixes 4613 and 4619 | Same shape as 10-02 |
+| `GRO` | `GRO 74 8 66 66`, with Show Offline Members checked and unchecked | The roster API lists all 74 members either way, and all 66 offline rows have a name and a GUID. H3's premise and F35 don't reproduce on this build |
+| `TIME` | `TIME 1791166608 1791166605 3 2026-10-05 02:16:48` | `GetServerTime()` exists, sits 3 s from the local clock, and its UTC date matches the time of the run. Usable for H2 |
+| `BLD` | `BLD 1.60.1 70205 Oct 2 2026 16001` | The client is on 70205, the build the shared checkout was re-pinned to (#83). The localized version and build info returns weren't in the paste |
+| `GTS` | All five functions return `false` on Alex's own profession. The client doesn't offer a guildmate's profession from the roster | `IsGuildTradeSkillsEnabled` is false. `IsTradeSkillLinked`, `IsTradeSkillGuild` and `IsTradeSkillGuildMember` exist, though the API docs don't list them; Blizzard calls all three (`Blizzard_ProfessionsTemplates/Blizzard_Professions.lua:378`). The linked-view skip in the scan is live. A guild view can't be opened on this build, so F5 can't happen here yet |
+| `CHL` | `CHL true true true true` | `ChatFrameUtil.InsertLink` and `OpenChat` exist, which PR #79 uses. Clicking shift-click and `[W]` is still unchecked |
+| `CHT` | `CHT true true false true true true` | Both `SendChatMessage` and `C_ChatInfo.SendChatMessage` exist, and they're different functions. The global is a wrapper in `Blizzard_DeprecatedChatInfo/Deprecated_ChatInfo.lua:8-10`, defined only when the `loadDeprecationFallbacks` CVar is on (`:4`). The `ChatEdit_InsertLink`, `ChatFrame_OpenChat` and `ChatFrame_SendTell` globals come from the same gated file (`Deprecated_ChatFrame.lua:4`, `:43`, `:74`, `:84`). The TOC notes say they "will be removed at the next expansion". `!gc` and `[G]` call the global, so they depend on that CVar |
+| `TELL` | `TELL Geo true`; no header reported | Not a two-word test. The probe used only `UnitName`'s first return, so it opened a whisper to `Geo`. Fixed in `docs/ingame-commands.md`; re-run pending |
+| `RL` | `RL true true true nil` | `ReloadUI` and `C_UI.Reload` exist. `issecurevariable("ReloadUI")` returned `true`, `nil`: secure, and no addon has tainted it |
+| `RLX` | "it reloaded" | `ReloadUI()` called from insecure code reloads the UI. It isn't protected on 70205, so F14's premise is wrong |
+
+Not run: `RE`, which needs a dungeon (Q2).
 
 ---
 
@@ -416,6 +452,10 @@ questions" table of `spec/forever-plan.md`; each entry below names its Q number 
    wago.tools listed build 1.60.1.70205 under `wow_classic_beta`
    (`spec/later/research/2026-10-03-companion-n9.md`), newer than the `70170` pin. The
    `Client:` line will show whether the client has patched past the pin.
+   **2026-10-04:** `BLD` printed `1.60.1 70205 Oct 2 2026 16001`, so the client is on 70205,
+   the same build as pin `e3ecc27`. That build is dated Oct 2, so it may or may not be the one
+   the 10-02 runs used. Nothing recorded on 10-02 or 10-03 can tell 70170 from 70205. The
+   `/gc report` `Session start` line records the build from now on.
 2. **`C_RestrictedActions` at runtime.** Does it exist, and does
    `ADDON_RESTRICTION_STATE_CHANGED` fire on entering a boss encounter? Task 4 depends on it.
    Probes: `RA`, `RS`, `RE`. **Partly answered 2026-10-02:** `RA true true true true false`, so

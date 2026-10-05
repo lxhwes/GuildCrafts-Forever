@@ -49,19 +49,19 @@ regardless of position.
 | ID | Issue | Item | Tags |
 |---|---|---|---|
 | H1 | [#4] | ~~CI: luacheck and the regression suites~~ | Done: PR #41, issue closed 2026-10-04 |
-| H2 | [#5] | Server time for sync revisions | `blocker`, `hardening`, `needs-ingame` |
-| H3 | [#6] | Persist GUID → name (unverified); roster-based prune (F35) | `hardening`, `needs-ingame`; `blocker` if the GRO probe confirms F35 |
+| H2 | [#5] | Server time for sync revisions | `blocker`, `hardening`, `needs-ingame`. `TIME` probed 2026-10-04: `GetServerTime()` is 3 s from the local clock |
+| H3 | [#6] | Persist GUID → name (unverified); roster-based prune (F35) | `hardening`, `needs-ingame`. GRO 2026-10-04 didn't reproduce it: the roster lists all members with GUIDs either way |
 | H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening` |
 | H5 | [#8] | ~~`/gc report`~~ | Done: PR #50, issue closed 2026-10-04 |
 | H6 | [#9] | ~~Scan diagnostics~~ | Done: PR #76, issue closed 2026-10-04 |
-| H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame` |
+| H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame`. RLX 2026-10-04: `ReloadUI()` isn't protected; what reset clears is still open |
 | H8 | [#11] | SyncPausePolicy follow-ups after Q2; silent send failures (F34) | `hardening`, `needs-ingame` |
 | H9 | [#12] | ~~`/gc drop` after an empty read~~ | Done: PR #43, issue closed 2026-10-04 |
-| H10 | [#13] | Guild views scanned as your own (F5) | `blocker`, `hardening`, `needs-ingame` |
+| H10 | [#13] | Guild views scanned as your own (F5) | `blocker`, `hardening`, `needs-ingame`. GTS 2026-10-04: 70205 has no guild view to open; the guild and linked checks exist |
 | H11 | [#14] | ~~Restore your own data from peers (F1)~~ | Done: PR #69, issue closed 2026-10-04 |
 | H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening`, `testing`, `needs-ingame` |
 | H13 | [#16] | ~~Favorites write booleans to SavedVariables~~ | Done: PR #67, issue closed 2026-10-04 |
-| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure |
+| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure. CHT 2026-10-04: the global `SendChatMessage` that `!gc` calls is a deprecation shim behind the `loadDeprecationFallbacks` CVar |
 | H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening`, `needs-ingame` |
 | H16 | [#19] | ~~Tooltip taint and rebuilds (F9, F10)~~ | Done: F10 in PR #41, F9 in PR #68, issue closed 2026-10-04 |
 | H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`; needed for wave 2 |
@@ -73,12 +73,13 @@ regardless of position.
 **Phase 1 exit gate:**
 - CI green on `main`.
 - Every `blocker` (H1, H2, H5, H9, H10) merged. H1, H5 and H9 done (PRs #41, #50, #43). H2 and
-  H10 remain. H14 isn't a blocker unless a CHT, TELL or CHL probe reproduces a failure (decided
+  H10 remain. Both have their probe results (2026-10-04); H10's bug can't trigger on 70205,
+  because the client offers no guild view. H14 isn't a blocker unless a CHT, TELL or CHL probe reproduces a failure (decided
   2026-10-04).
 - The rest either merged or deferred in its issue with a reason.
 - H8 answered or explicitly deferred.
-- The GRO and CHL probes run. If GRO confirms F35, that fix is merged. The F25 fix is merged
-  (PR #79); CHL checks it in game.
+- The GRO and CHL probes run. Done 2026-10-04: GRO didn't confirm F35, and CHL found the
+  `ChatFrameUtil` functions PR #79 uses. The click check for F25 is still open.
 - D1 cut 1 merged. Done: PR [#3].
 
 ---
@@ -222,7 +223,7 @@ G: in game.
 
 | # | Question | Issue | Answered by |
 |---|---|---|---|
-| Q1 | Full client build number for the 2026-10-02/03 runs | [#24] | H5 has landed; closes when a `/gc report` `Client:` line is recorded |
+| Q1 | Full client build number for the 2026-10-02/03 runs | [#24] | BLD 2026-10-04: 70205. The 10-02/03 build can't be recovered |
 | Q2 | Does `ADDON_RESTRICTION_STATE_CHANGED` fire at a boss pull? | [#25] | The `RE` probe; unblocks H8 |
 | Q4 | Why the first `/gc dump` on 2026-10-02 stored nothing | [#26] | H5 and H6 have landed; needs the reproduction in the issue |
 | Q5 | Sender name and whisper reach for a guildmate on another server prefix | [#27] | Phase 2 two-client run |
@@ -268,22 +269,22 @@ Status as of `eebe4c2`.
 | F2 | `GetProfessions` read as five slots | Closed: Forever's slots are prof1, prof2, First Aid, Fishing, Cooking (`Camelot/Blizzard_ProfessionsBook.lua:21`, `PROF` probe) |
 | F3 | First Aid not tracked | Open, H17 [#20] |
 | F4 | `!gc` echo abuse | Open, H14 [#17] |
-| F5 | Guild views scanned as your own | Open, H10 [#13] |
+| F5 | Guild views scanned as your own | Open, H10 [#13]. No guild view on 70205 (GTS, 2026-10-04) |
 | F6 | Sync whispers strip the realm | Fixed on Forever: whisper targets come from the roster (`9faf497`) |
 | F7 | RESUME duplicates transfers | Open, H12 [#15] |
 | F8 | DR silent after a higher term | Open, H12 [#15]. The stale DR keeps answering `!gc` (audit R4) |
 | F9 | Tooltip debounce never debounces | Closed: one rebuild per sync burst and one in-combat retry, H16 PR #68 |
 | F10 | Tooltip writes the global `_` | Closed: fixed by H1's zero-warning pass (PR #41) |
 | F11 | Scan retries uncapped | Retries capped at 10 with one pending timer (PR #76); event rework, cancel on window close and token still open, H15 [#18] |
-| F12 | Categories lost (`categoryName`) | Open, H15 [#18] |
+| F12 | Categories lost (`categoryName`) | Open, H15 [#18]. `GetCategoryInfo` exists (CAT, 2026-10-04); CATR queued for a recipe's category |
 | F13 | Election watchdog resets on every recompute | Open, H12 [#15] |
-| F14 | `/gc reset` calls `ReloadUI()` | Open, H7 [#10] |
+| F14 | `/gc reset` calls `ReloadUI()` | Premise disproved: `ReloadUI()` isn't protected (RLX, 2026-10-04). Reset scope still open, H7 [#10] |
 | F15 | Fuzzy search keeps `y` | Post-launch [#33] |
 | F16 | `IsSpellKnown` checked before `C_SpellBook` | Open, H15 [#18] |
 | F17 | Identity split on Forever | Fixed (`9faf497`) |
 | F18 | ChatThrottleLib v31 taint | Library updated to v32 (`a1c0554`); not yet checked in game, Q6 [#28] |
 | F19 | Empty read purges every profession | Fixed (`fd788e6`, `f0522c4`); the last hole, H9 [#12], fixed by PR #43 |
-| F20 | Whisper button breaks two-word names | Fixed in code by PR #79; not yet checked in game, H14 [#17] |
+| F20 | Whisper button breaks two-word names | Fixed in code by PR #79; not yet checked in game, H14 [#17]. The 2026-10-04 TELL run tested a one-word name; probe fixed |
 | F21 | Empty profession name stops the scan | Logged (PR #76), not fixed, H15 [#18] |
 | C1 | First Aid and Fishing untracked; JC/Inscription rows | JC/Inscription gated (`c16b09f`); First Aid and Fishing open, H17 [#20] |
 | C2 | Gathering recipes hidden | Open, H17 [#20]. `TradeSkillRecipeInfo.isGatheringRecipe` exists at the pin (audit X6) |
@@ -302,7 +303,7 @@ Evidence and line numbers (at `60c6b32`) are in
 | F22 | `!gc` fallback delays collide: whole-second jitter, fixed 5 s BDR [R1, R2] | Open, H14 [#17] |
 | F23 | `!gc` cooldown is stamped only on the client that posted [R7] | Open, H14 [#17] |
 | F24 | `GC_ACK` goes out before the post; a failed post silences every responder [R8] | Open, H14 [#17] |
-| F25 | Shift-click link and `[W]` call `ChatEdit_InsertLink`/`ChatFrame_OpenChat` unguarded; Forever's UI uses `ChatFrameUtil` [U6] | Fixed in code by PR #79; not yet checked in game (CHL probe), H14 [#17] |
+| F25 | Shift-click link and `[W]` call `ChatEdit_InsertLink`/`ChatFrame_OpenChat` unguarded; Forever's UI uses `ChatFrameUtil` [U6] | Fixed in code by PR #79. CHL 2026-10-04: all four functions exist; the click check is open, H14 [#17] |
 | F26 | Messages from a sender whose name doesn't resolve are dropped silently, though the payload carries a GUID [R5, D2] | Logging and a drop count landed in PR #50; the payload-GUID fallback is still open, H4 [#7] |
 | F27 | `RegisterAddonMessagePrefix` result unchecked; a client that can't receive can still be elected DR [D1] | The registration result shows in `/gc report` (PR #50); the warning and keeping a deaf client out of the election are still open, H12 [#15] |
 | F28 | Any `HEARTBEAT` refreshes the DR watchdog, so a second DR keeps a dead one alive [D6, E1] | Open, H12 [#15] |
@@ -312,7 +313,7 @@ Evidence and line numbers (at `60c6b32`) are in
 | F32 | Every `TRADE_SKILL_LIST_UPDATE` runs a full profession scan [P6] | Open, H15 [#18] |
 | F33 | Two roster passes per `GUILD_ROSTER_UPDATE`; `UI:Refresh` on every delta with no debounce [P7, P8] | Open, H19 [#44]; measure (M2) before fixing |
 | F34 | Send failures other than throttling are dropped silently, `HELLO` included [D5] | Send-failure logging and a counter landed in PR #76; telling `AddOnMessageLockdown` apart and retrying are still open, H8 [#11] |
-| F35 | `PruneRoster` trusts any roster with two rows; an online-only roster would tombstone members offline 7+ days [L2, L3] | Open, H3 [#6]; GRO probe |
+| F35 | `PruneRoster` trusts any roster with two rows; an online-only roster would tombstone members offline 7+ days [L2, L3] | Not reproduced: GRO 2026-10-04 listed all 74 members, offline ones with GUIDs, whatever the Show Offline box said. H3 [#6] |
 | F36 | The 45-day prune writes no tombstone, and ex-members revive after tombstone expiry [L4] | Open, H12 [#15] |
 | F37 | `!gc` misses `\|Hspell:` links and recipe links for item-producing recipes [`!gc` (c), U6] | Post-launch [#36] |
 | F38 | Login reminder repeats every login and nags when a profession can't store recipes [L5] | Post-launch [#36] |
