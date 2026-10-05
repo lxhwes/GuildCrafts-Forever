@@ -649,16 +649,18 @@ end)
 -- H15 (#18), F21: an empty profession name is "not ready", not "not tracked".
 test("an empty profession name falls back to the recipe, then retries", function()
     local byRecipe = "Alchemy"
+    local firstLookup
     tradeSkill({
         GetBaseProfessionInfo = function()
             return { professionName = "", skillLevel = 1, maxSkillLevel = 75 }
         end,
         GetProfessionInfoByRecipeID = function(id)
-            assert(id == 201, "looked up recipe " .. tostring(id))
+            firstLookup = firstLookup or id
             return { professionName = byRecipe }
         end,
     })
     assert(Data:ScanTradeSkillModern(), "fallback name not used")
+    assert(firstLookup == 201, "name fallback looked up recipe " .. tostring(firstLookup))
     assert(count(db[playerKey].professions.Alchemy) == 2, "recipes not stored under the fallback name")
     db, debugs = {}, {}
     byRecipe = ""
@@ -666,6 +668,89 @@ test("an empty profession name falls back to the recipe, then retries", function
     assert(not logged("not tracked"), "empty name logged as not tracked")
     assert(#timers == 1, "empty name did not retry")
     assert(logged("no profession name"), "retry reason missing: " .. table.concat(debugs, " | "))
+end)
+
+-- H21 (#98): after a quick window switch the recipe list can be the previous window's.
+local function window(name, owners)
+    tradeSkill({
+        GetBaseProfessionInfo = function()
+            return { professionName = name, skillLevel = 1, maxSkillLevel = 75 }
+        end,
+        GetRecipeInfo = function(id) return { learned = true, name = "Recipe " .. id } end,
+        GetProfessionInfoByRecipeID = owners,
+    })
+end
+
+test("a Herbalism window holding Alchemy's recipe list stores nothing and retries", function()
+    window("Herbalism", function() return { professionName = "Alchemy", professionID = 171 } end)
+    Data:ScanTradeSkillModern()
+    local herbalism = db[playerKey] and db[playerKey].professions.Herbalism
+    assert(not herbalism or count(herbalism) == 0, "Alchemy's recipes stored under Herbalism")
+    assert(not (db[playerKey] and db[playerKey].professions.Alchemy), "Alchemy stored from a Herbalism window")
+    assert(#sent == 0, "a mismatched list was broadcast")
+    assert(#timers == 1, "a mismatched list did not retry")
+    assert(logged("isn't Herbalism's"), "retry reason missing: " .. table.concat(debugs, " | "))
+end)
+
+test("one stray recipe from another profession is skipped and the rest are stored", function()
+    window("Alchemy", function(id)
+        return { professionName = id == 203 and "First Aid" or "Alchemy" }
+    end)
+    assert(Data:ScanTradeSkillModern())
+    local recipes = db[playerKey].professions.Alchemy.recipes
+    assert(recipes[-201] and recipes[-202], "Alchemy's own recipes not stored")
+    assert(not recipes[-203], "the First Aid recipe was stored under Alchemy")
+    assert(#timers == 0, "a mostly correct list retried")
+    assert(logged("1 from another profession"), "skipped recipe not logged: " .. table.concat(debugs, " | "))
+end)
+
+test("a recipe with no owner name yet holds the whole scan for a retry", function()
+    local resolved = false
+    window("Alchemy", function(id)
+        return { professionName = (id ~= 203 or resolved) and "Alchemy" or "" }
+    end)
+    Data:ScanTradeSkillModern()
+    assert(not (db[playerKey] and next(db[playerKey].professions.Alchemy.recipes)),
+        "a scan with an unresolved recipe stored a partial list")
+    assert(#sent == 0, "a partial list was broadcast")
+    assert(#timers == 1, "an unresolved owner did not retry")
+    assert(logged("no owner yet"), "retry reason missing: " .. table.concat(debugs, " | "))
+    resolved = true
+    table.remove(timers, 1).fn()
+    assert(count(db[playerKey].professions.Alchemy) == 3, "the retry did not store the full list")
+end)
+
+test("a scan while the recipe list is being rebuilt stores nothing and retries", function()
+    local changing = true
+    window("Alchemy", function(id)
+        return { professionName = id == 203 and "Cooking" or "Alchemy" }
+    end)
+    C_TradeSkillUI.IsDataSourceChanging = function() return changing end
+    Data:ScanTradeSkillModern()
+    assert(not db[playerKey], "a scan during a rebuild touched the database")
+    assert(#sent == 0, "a scan during a rebuild broadcast")
+    assert(#timers == 1, "a rebuilding list did not retry")
+    assert(logged("data source changing"), "retry reason missing: " .. table.concat(debugs, " | "))
+    changing = false
+    table.remove(timers, 1).fn()
+    assert(count(db[playerKey].professions.Alchemy) == 2, "the settled list was not stored")
+end)
+
+test("without GetProfessionInfoByRecipeID the scan stores the whole list", function()
+    window("Herbalism", nil)
+    assert(Data:ScanTradeSkillModern())
+    assert(count(db[playerKey].professions.Herbalism) == 3, "Classic scan changed")
+    assert(#timers == 0, "Classic scan retried")
+end)
+
+test("a child skill line on recipes matches its parent's window", function()
+    window("Alchemy", function()
+        return { professionName = "Forever Alchemy", professionID = 2937,
+            parentProfessionName = "Alchemy", parentProfessionID = 171 }
+    end)
+    assert(Data:ScanTradeSkillModern())
+    assert(count(db[playerKey].professions.Alchemy) == 3, "child-line recipes skipped")
+    assert(#timers == 0, "child-line recipes retried")
 end)
 
 -- H2 (#5): revisions use the realm clock, so a fast local clock can't win.
