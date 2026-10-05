@@ -49,9 +49,9 @@ regardless of position.
 | ID | Issue | Item | Tags |
 |---|---|---|---|
 | H1 | [#4] | ~~CI: luacheck and the regression suites~~ | Done: PR #41, issue closed 2026-10-04 |
-| H2 | [#5] | Server time for sync revisions | `blocker`, `hardening`, `needs-ingame`. `TIME` probed 2026-10-04: `GetServerTime()` is 3 s from the local clock |
+| H2 | [#5] | Server time for sync revisions | `blocker`, `hardening`, `needs-ingame`. `TIME` probed 2026-10-04: `GetServerTime()` is 3 s from the local clock. Fix in PR #93 |
 | H3 | [#6] | ~~Persist GUID → name (unverified); roster-based prune (F35)~~ | Closed as rejected 2026-10-04: GRO didn't reproduce it |
-| H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening`. Phase 1 (2026-10-04): the payload-GUID fallback for F26. The cold-start premise is read from `/gc report`'s unresolved-sender count in the Phase 2 run |
+| H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening`. Phase 1 (2026-10-04): the payload-GUID fallback for F26 (PR #94). The cold-start premise is read from `/gc report`'s unresolved-sender count in the Phase 2 run |
 | H5 | [#8] | ~~`/gc report`~~ | Done: PR #50, issue closed 2026-10-04 |
 | H6 | [#9] | ~~Scan diagnostics~~ | Done: PR #76, issue closed 2026-10-04 |
 | H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame`. RLX 2026-10-04: `ReloadUI()` isn't protected. Phase 1: reset keeps settings and says what it cleared (PR #88) |
@@ -59,15 +59,15 @@ regardless of position.
 | H9 | [#12] | ~~`/gc drop` after an empty read~~ | Done: PR #43, issue closed 2026-10-04 |
 | H10 | [#13] | Guild views scanned as your own (F5) | `hardening`, `needs-ingame`. Not a blocker since 2026-10-04: 70205 has no guild view. Guard in PR #85 |
 | H11 | [#14] | ~~Restore your own data from peers (F1)~~ | Done: PR #69, issue closed 2026-10-04 |
-| H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening`, `testing`, `needs-ingame`. Phase 1 (2026-10-04): F8, F13, F28. Deferred to wave 1: F7, F27, F36, BDR eviction, paused deltas, returning DR |
+| H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening`, `testing`, `needs-ingame`. Phase 1 (2026-10-04): F8, F13, F28 (PR #96). Deferred to wave 1: F7, F27, F36, BDR eviction, paused deltas, returning DR |
 | H13 | [#16] | ~~Favorites write booleans to SavedVariables~~ | Done: PR #67, issue closed 2026-10-04 |
-| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure. Phase 1 (2026-10-04): `C_ChatInfo.SendChatMessage`, F4, F24. Deferred to wave 1: F22, F23, which need several responders |
+| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure. Phase 1 (2026-10-04): `C_ChatInfo.SendChatMessage`, F4, F24 (PR #90). Deferred to wave 1: F22, F23, which need several responders |
 | H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F12, F16, F21 (PR #89). F11's event rework and F32 move to H19 for wave 3 |
 | H16 | [#19] | ~~Tooltip taint and rebuilds (F9, F10)~~ | Done: F10 in PR #41, F9 in PR #68, issue closed 2026-10-04 |
 | H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): the empty-search copy (PR #87). C1–C3 deferred to wave 2; PROFX probe queued |
 | H18 | [#21] | ~~Release workflow guards~~ | Done: PR #77, issue closed 2026-10-04 |
-| H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F29. Deferred to wave 3: F30, F31, F33, M1–M4, and F11/F32 from H15 |
-| H20 | [#80] | Changelog upload sends upstream history | `hardening`, before the first publish. Phase 1 (2026-10-04): per-version notes generated in `release.yml` |
+| H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F29 (PR #95). Deferred to wave 3: F30, F31, F33, M1–M4, and F11/F32 from H15 |
+| H20 | [#80] | Changelog upload sends upstream history | `hardening`, before the first publish. Phase 1 (2026-10-04): per-version notes generated in `release.yml` (PR #92) |
 | D1 cut 1 | [#3] | Documentation refresh, cut 1 | Merged 2026-10-03 |
 
 **Phase 1 exit gate:**
