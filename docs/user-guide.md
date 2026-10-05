@@ -187,8 +187,6 @@ These are open in the current beta build. Each has a plan ID.
 - Cooldowns aren't captured. The scanner Forever uses doesn't read them (C4, after launch).
 - Specialisation detection uses upstream's TBC table. On Forever, tags may be wrong or missing
   while that's reviewed (C3; H17).
-- Recipes are listed without category headings. The scanner reads a category field Forever
-  doesn't provide (F12; H15).
 - The `[W]` whisper button and shift-click links use Forever's chat API, and `[W]` sets the
   two-word name as the whisper target directly. Neither has been checked in game yet (F20, F25;
   H14).
