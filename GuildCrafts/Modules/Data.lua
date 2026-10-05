@@ -120,8 +120,9 @@ end
 
 -- Far-future stamps come from a broken clock. They're refused, not clamped:
 -- clamping rewrites each revision by arrival time, which reorders them.
+-- Only the realm clock can judge; a local fallback clock may itself be slow.
 local function IsFutureStamp(stamp)
-    return type(stamp) == "number" and stamp > Now() + MAX_CLOCK_AHEAD
+    return GetServerTime ~= nil and type(stamp) == "number" and stamp > Now() + MAX_CLOCK_AHEAD
 end
 
 local function HasFutureStamp(entry)

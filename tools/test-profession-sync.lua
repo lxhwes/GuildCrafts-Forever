@@ -752,6 +752,10 @@ test("clients without GetServerTime stamp with the local clock", function()
     known = { indices = { nil, 2 }, [2] = "Herbalism" }
     classic:DropProfession("alchemy")
     assert(db[playerKey].dropped.Alchemy == now, "fallback did not use time()")
+    -- A fallback clock may be slow, so it never refuses a peer's stamp.
+    now = serverNow - 1200
+    assert(classic:MergeIncoming({ ["Other-Realm"] = entry({ Alchemy = profession(2, 0, serverNow) }, serverNow) }),
+        "slow fallback clock refused a server-stamped snapshot")
 end)
 
 local failed = 0
