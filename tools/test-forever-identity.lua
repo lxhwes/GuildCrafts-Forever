@@ -45,6 +45,7 @@ dofile("GuildCrafts/Modules/Comms.lua")
 local Comms = GuildCrafts.Comms
 local Data
 local sent = {}
+local realSendMessage = Comms.SendMessage
 Comms.SendMessage = function(_, kind, payload) sent[#sent + 1] = { kind, payload } end
 
 -- Deliver one addon message as AceComm would, with the envelope already decoded.
@@ -243,6 +244,19 @@ test("a cached sender's SYNC_REQUEST can't name a different requester", function
     assert(Comms.senderFallbackRefusals == 1, "refusal not counted")
     receive("Kuw Pal", "SYNC_REQUEST", { sender = kuw, vector = {}, retry = 0 })
     assert(Comms.unresolvedSenderDrops == 1, "matching request dropped")
+end)
+
+test("whispers to a fallback-keyed GUID go to the name that sent it", function()
+    coldStart()
+    local targets = {}
+    Comms.Serialize = function() return "x" end
+    Comms.SendCommMessage = function(_, _, _, _, target) targets[#targets + 1] = target end
+    receive("Kuw Pal", "HELLO", { sender = kuw, version = 3 })
+    realSendMessage(Comms, "SYNC_RESPONSE", {}, "WHISPER", kuw)
+    assert(targets[1] == "Kuw Pal", "whisper target " .. tostring(targets[1]))
+    now = now + Comms.SENDER_FALLBACK_TTL + 1
+    realSendMessage(Comms, "SYNC_RESPONSE", {}, "WHISPER", kuw)
+    assert(#targets == 1, "whispered after the fallback expired")
 end)
 
 test("the fallback cache expires", function()

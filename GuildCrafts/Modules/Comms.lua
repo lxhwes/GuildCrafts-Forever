@@ -1424,7 +1424,7 @@ function Comms:SendMessage(msgType, payload, distribution, target, priority)
 
     -- Send via AceComm (handles chunking automatically)
     if distribution == "WHISPER" and target then
-        local whisperTarget = GuildCrafts.Data:GetWhisperTarget(target)
+        local whisperTarget = GuildCrafts.Data:GetWhisperTarget(target) or self:FallbackWhisperTarget(target)
         if not whisperTarget then
             GuildCrafts:Debug("SendMessage: no whisper target for", target, "— dropped", msgType)
             return
@@ -1466,6 +1466,15 @@ function Comms:RevokeSenderFallback(rawSender, entry, reason)
         self.addonUsers[entry.key] = nil
         self:RecomputeElection()
     end
+end
+
+--- The sender name a fallback key came from, so replies reach whoever sent it.
+function Comms:FallbackWhisperTarget(key)
+    local now = time()
+    for name, entry in pairs(self._senderFallback) do
+        if entry.key == key and now - entry.at <= SENDER_FALLBACK_TTL then return name end
+    end
+    return nil
 end
 
 --- Called when the roster resolves a sender name: retire any fallback for it.
