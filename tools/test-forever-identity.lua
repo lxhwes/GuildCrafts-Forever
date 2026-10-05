@@ -254,18 +254,58 @@ test("whispers to a fallback-keyed GUID go to the name that sent it", function()
     receive("Kuw Pal", "HELLO", { sender = kuw, version = 3 })
     realSendMessage(Comms, "SYNC_RESPONSE", {}, "WHISPER", kuw)
     assert(targets[1] == "Kuw Pal", "whisper target " .. tostring(targets[1]))
+    Comms.addonUsers[kuw] = nil
     now = now + Comms.SENDER_FALLBACK_TTL + 1
     realSendMessage(Comms, "SYNC_RESPONSE", {}, "WHISPER", kuw)
     assert(#targets == 1, "whispered after the fallback expired")
 end)
 
-test("the fallback cache expires", function()
+test("the fallback cache expires once the peer leaves the election", function()
     coldStart()
     receive("Kuw Pal", "HELLO", { sender = kuw, version = 3 })
+    Comms.addonUsers[kuw] = nil  -- as the DR watchdog would
     now = now + Comms.SENDER_FALLBACK_TTL + 1
     receive("Kuw Pal", "GC_ACK")
     assert(GuildCrafts._gcLastAddonAck == nil, "expired entry used")
     assert(Comms.unresolvedSenderDrops == 1, "drops: " .. Comms.unresolvedSenderDrops)
+end)
+
+test("a peer still in the election stays resolvable past the TTL", function()
+    coldStart()
+    receive("Kuw Pal", "HELLO", { sender = kuw, version = 3 })
+    now = now + Comms.SENDER_FALLBACK_TTL + 60
+    receive("Kuw Pal", "SYNC_REQUEST", { sender = kuw, vector = {}, retry = 1 })
+    receive("Kuw Pal", "GC_ACK")
+    assert(GuildCrafts._gcLastAddonAck == now, "GC_ACK dropped")
+    assert(Comms.unresolvedSenderDrops == 0, "drops: " .. Comms.unresolvedSenderDrops)
+end)
+
+test("a quiet claim gives way to another sender after the TTL", function()
+    coldStart()
+    receive("Alt One", "HELLO", { sender = kuw, version = 3 })
+    now = now + Comms.SENDER_FALLBACK_TTL + 1
+    receive("Alt Two", "HELLO", { sender = kuw, version = 3 })
+    assert(Comms.senderFallbackRefusals == 0, "refusals: " .. Comms.senderFallbackRefusals)
+    assert(Comms._senderFallback["Alt Two"], "new claimant not cached")
+    assert(Comms._senderFallback["Alt One"] == nil, "quiet claimant kept")
+end)
+
+test("a GUID the fallback added is evicted on revocation after a cache eviction", function()
+    coldStart()
+    local claimed = "Player-4613-00000001"
+    receive("Kuw Pal", "HELLO", { sender = claimed, version = 3 })
+    for i = 1, Comms.SENDER_FALLBACK_MAX do
+        now = now + 1
+        receive("Alt " .. i, "HELLO", { sender = string.format("Player-4619-%08X", 0x100 + i), version = 3 })
+    end
+    assert(Comms._senderFallback["Kuw Pal"] == nil, "first entry not evicted")
+    now = now + 1
+    receive("Kuw Pal", "HELLO", { sender = claimed, version = 3 })
+    roster = { { "Geo Prizm", true, me }, { "Kuw Pal", true, kuw } }
+    now = now + 10
+    receive("Kuw Pal", "GC_ACK")
+    assert(Comms.addonUsers[claimed] == nil, "contradicted GUID kept")
+    assert(Comms.currentDR == kuw, "DR is " .. tostring(Comms.currentDR))
 end)
 
 test("the fallback cache is bounded and drops its oldest entry", function()

@@ -154,9 +154,10 @@ function Comms:OnInitialize()
     self.unresolvedSenderDrops = 0
     self.sendFailures          = 0
 
-    -- Sender fallback (Forever): unresolved sender name → { key, at, added }
-    -- from an accepted HELLO or HEARTBEAT payload GUID.
+    -- Sender fallback (Forever): unresolved sender name → { key, at } from an
+    -- accepted HELLO or HEARTBEAT payload GUID; at is its last message.
     self._senderFallback           = {}
+    self._fallbackAdded            = {}  -- GUIDs only a fallback put in addonUsers
     self.senderFallbacks           = 0
     self.senderFallbackRefusals    = 0
     self.senderFallbackRevocations = 0
@@ -1454,17 +1455,25 @@ end
 -- Sender fallback (Forever, F26)
 -- A sender name the roster can't resolve is keyed by the GUID its HELLO or
 -- HEARTBEAT carries, if ForeverIdentity finds no conflict. That name's other
--- messages use the same GUID for SENDER_FALLBACK_TTL. The roster wins as soon
--- as it resolves the name.
+-- messages use the same GUID while the GUID is in addonUsers, or for
+-- SENDER_FALLBACK_TTL after its last message. Every use rechecks the roster,
+-- and the roster wins as soon as it resolves the name.
 ----------------------------------------------------------------------
+
+function Comms:IsSenderFallbackLive(entry, now)
+    return self.addonUsers[entry.key] ~= nil or now - entry.at <= SENDER_FALLBACK_TTL
+end
 
 function Comms:RevokeSenderFallback(rawSender, entry, reason)
     self._senderFallback[rawSender] = nil
     self.senderFallbackRevocations = self.senderFallbackRevocations + 1
     GuildCrafts:Debug("Sender fallback revoked:", rawSender, "claimed", entry.key, "—", reason)
-    if entry.added and self.addonUsers[entry.key] then
-        self.addonUsers[entry.key] = nil
-        self:RecomputeElection()
+    if self._fallbackAdded[entry.key] then
+        self._fallbackAdded[entry.key] = nil
+        if self.addonUsers[entry.key] then
+            self.addonUsers[entry.key] = nil
+            self:RecomputeElection()
+        end
     end
 end
 
@@ -1472,23 +1481,19 @@ end
 function Comms:FallbackWhisperTarget(key)
     local now = time()
     for name, entry in pairs(self._senderFallback) do
-        if entry.key == key and now - entry.at <= SENDER_FALLBACK_TTL then return name end
+        if entry.key == key and self:IsSenderFallbackLive(entry, now) then return name end
     end
     return nil
 end
 
 --- Called when the roster resolves a sender name: retire any fallback for it.
 function Comms:SettleSenderFallback(rawSender, key)
-    local fallback = self._senderFallback
-    if not next(fallback) then return end
     -- The key's owner has been heard from by name, so a revocation must not evict it.
-    for _, entry in pairs(fallback) do
-        if entry.key == key then entry.added = nil end
-    end
-    local entry = fallback[rawSender]
+    self._fallbackAdded[key] = nil
+    local entry = self._senderFallback[rawSender]
     if not entry then return end
     if entry.key == key then
-        fallback[rawSender] = nil
+        self._senderFallback[rawSender] = nil
         GuildCrafts:Debug("Sender fallback confirmed:", rawSender, "is", key)
     else
         self:RevokeSenderFallback(rawSender, entry, "the roster resolves it to " .. key)
@@ -1503,11 +1508,10 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
 
     local fallback = self._senderFallback
     local now = time()
-    local entry = fallback[rawSender]
-    if entry and now - entry.at > SENDER_FALLBACK_TTL then
-        fallback[rawSender] = nil
-        entry = nil
+    for name, other in pairs(fallback) do
+        if not self:IsSenderFallbackLive(other, now) then fallback[name] = nil end
     end
+    local entry = fallback[rawSender]
 
     local field = SENDER_KEY_FIELD[envelope.t]
     local claim = field and type(envelope.p) == "table" and envelope.p[field] or nil
@@ -1524,6 +1528,7 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
             self.senderFallbackRefusals = self.senderFallbackRefusals + 1
             return nil, "payload sender " .. tostring(requester) .. " isn't cached " .. key
         end
+        entry.at = now
         self.senderFallbacks = self.senderFallbacks + 1
         GuildCrafts:Debug("Sender fallback:", envelope.t, "from", rawSender, "keyed by cached", key)
         return key
@@ -1537,8 +1542,12 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
     else
         for name, other in pairs(fallback) do
             if name ~= rawSender and other.key == claim then
-                reason = "GUID already claimed by " .. name
-                break
+                -- A claimant quiet for the TTL gives way; an active one keeps the GUID.
+                if now - other.at <= SENDER_FALLBACK_TTL then
+                    reason = "GUID already claimed by " .. name
+                    break
+                end
+                fallback[name] = nil
             end
         end
     end
@@ -1702,8 +1711,10 @@ function Comms:ProcessIncoming(message, distribution, sender)
 
     -- Remember a key that only the fallback put in addonUsers, so a revocation can undo it.
     if viaFallback and not wasKnown and self.addonUsers[sender] then
-        local entry = self._senderFallback[rawSender]
-        if entry and entry.key == sender then entry.added = true end
+        for key in pairs(self._fallbackAdded) do
+            if not self.addonUsers[key] then self._fallbackAdded[key] = nil end
+        end
+        self._fallbackAdded[sender] = true
     end
 end
 
