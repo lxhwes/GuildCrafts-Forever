@@ -355,6 +355,43 @@ Follow-up the same evening, gist comment 6406842 (02:40 UTC), with Alchemy open 
 
 ---
 
+## Solo checks on `main`, 2026-10-05
+
+Alex ran the solo in-game checklist on `main` at `a66e81e` (PRs #85–#97), build `1.60.1.70205`, and
+pasted the results into chat. `/gc report` read `Client: 1.60.1 | 70205 | Oct 2 2026 | 16001 | |`.
+
+| Check | Result | What it settles |
+|---|---|---|
+| `PROFX` | `1 Alchemy 31 75 1 171`, `2 Herbalism 55 75 2 182`, `3 First Aid 41 75 1 129`, `4 Fishing 1 75 2 356`, `5 Cooking 14 75 1 185`; the skill line name matches the profession name each time | First Aid is skill line 129, Fishing 356 and Cooking 185. The PSL list doesn't have these (H17) |
+| `TS` | `First Aid nil 32 4`, `Fishing nil 3 0`, `Herbalism nil 3 1`, `Alchemy nil 197 7`. This character has no Smelting | First Aid and Fishing both open a profession window the modern scan can read. Herbalism has 3 recipe IDs, 1 learned |
+| Category headings (F12) | Shown as expected | PR #89 works in game |
+| Empty search (H17) | `No user has 'zzzz' recorded` | PR #87 works in game |
+| Shift-click link (F25) | Works | `ChatFrameUtil.InsertLink` path confirmed |
+| `[G]` (H14) | Posts as expected | `C_ChatInfo.SendChatMessage` path confirmed |
+| `[W]` (F20) | Not run | Needs a guildmate with the addon |
+| Minimap button | Shown (book icon), left-click toggles the window | — |
+| `/gc reset` (H7) | With the minimap button, `[Online]` and `[Tooltip]` all turned off, all three stayed off after the reset | PR #88 keeps settings in game |
+| `/gc report` | Has the `Sender fallbacks: accepted 0, refused 0, revoked 0` line. Tracked professions never log "not tracked"; First Aid and Fishing do, as expected until H17 | PR #94's report line works |
+
+Found during the run:
+- **Recipes filed under the wrong profession (H21, [#98], blocker).** The debug log shows the scan
+  pairing one window's name with the previous window's recipe list after a quick switch:
+  `Alchemy: 132 recipe IDs, 5 learned` (Cooking's numbers), `Herbalism: 197 recipe IDs, 7 learned`
+  (Alchemy's), and `Herbalism: 32 recipe IDs, 4 learned, 1 new` (First Aid's, one recipe stored and
+  broadcast). The report's stored totals are Alchemy 15, Cooking 15 and Herbalism 17. The learned
+  counts are 7 for Alchemy and 1 for Herbalism (TS), and 5 for Cooking (its own correct scan line).
+  Herbalism's partial-scan guard then fires on every open and gives up after 10 retries. The 10-03
+  `/gc dump` already stored 11 Alchemy recipes, more than the 7 learned on 10-04, so the bug
+  predates Phase 1.
+- **No addon-list icon or category, and no addon-compartment entry.** Forever's addon list reads
+  `## IconTexture`/`## IconAtlas` and `## Category` (`Blizzard_AddOnList/AddonList.lua:390-394`,
+  `:456` at e3ecc27). The compartment reads `## AddonCompartmentFunc` and its OnEnter/OnLeave
+  variants (`Blizzard_Minimap/Mainline/AddonCompartment.lua:77-120`). The Camelot TOC has none of
+  them. The tooltip's `@project-version@` is expected for a copy run from source; the packager
+  fills it in.
+
+---
+
 ## Test results
 
 The solo and two-client procedures moved to `docs/testing.md` on 2026-10-03. The results below

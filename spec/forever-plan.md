@@ -64,7 +64,7 @@ regardless of position.
 | H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure. Phase 1 (2026-10-04): `C_ChatInfo.SendChatMessage`, F4, F24 (PR #90). Deferred to wave 1: F22, F23, which need several responders. Phase 1 part merged (#90); issue moved to Phase 3 |
 | H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F12, F16, F21 (PR #89). F11's event rework and F32 move to H19 for wave 3. Phase 1 part merged (#89); issue moved to Phase 3 |
 | H16 | [#19] | ~~Tooltip taint and rebuilds (F9, F10)~~ | Done: F10 in PR #41, F9 in PR #68, issue closed 2026-10-04 |
-| H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): the empty-search copy (PR #87). C1–C3 deferred to wave 2; PROFX probe queued. Phase 1 part merged (#87); issue moved to Phase 3 |
+| H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): the empty-search copy (PR #87). C1–C3 deferred to wave 2; PROFX probe queued. Phase 1 part merged (#87); issue moved to Phase 3. PROFX 2026-10-05: First Aid is skill line 129, Fishing 356 |
 | H18 | [#21] | ~~Release workflow guards~~ | Done: PR #77, issue closed 2026-10-04 |
 | H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F29 (PR #95). Deferred to wave 3: F30, F31, F33, M1–M4, and F11/F32 from H15. Phase 1 part merged (#95); issue moved to Phase 3 |
 | H20 | [#80] | ~~Changelog upload sends upstream history~~ | Done: PR #92 (also keeps `AGENTS.md` out of the zip), issue closed 2026-10-05 |
@@ -93,6 +93,12 @@ has the commands and the order for each one.
 After the tag, run the two-client checklist ([`docs/testing.md`](../docs/testing.md)) with
 **one** guildmate before anyone else installs it. If they're on a different server prefix, that
 also answers Q5 ([#27]).
+
+Blocker found in game on 2026-10-05, before the tag:
+
+| ID | Issue | Item | Tags |
+|---|---|---|---|
+| H21 | [#98] | Scan files recipes under the wrong profession after a window switch | `blocker`, `hardening` |
 
 **Phase 2 exit gate:** the two-client checklist passes end to end, including a drop on one
 client while the other is offline, then reconnect.
@@ -285,7 +291,7 @@ Status as of `eebe4c2`.
 | F9 | Tooltip debounce never debounces | Closed: one rebuild per sync burst and one in-combat retry, H16 PR #68 |
 | F10 | Tooltip writes the global `_` | Closed: fixed by H1's zero-warning pass (PR #41) |
 | F11 | Scan retries uncapped | Retries capped at 10 with one pending timer (PR #76); event rework, cancel on window close and token still open, H15 [#18] |
-| F12 | Categories lost (`categoryName`) | Fixed: PR #89. Headings not yet checked in game |
+| F12 | Categories lost (`categoryName`) | Fixed: PR #89. Headings checked in game 2026-10-05 |
 | F13 | Election watchdog resets on every recompute | Fixed: PR #96 |
 | F14 | `/gc reset` calls `ReloadUI()` | Closed: `ReloadUI()` isn't protected (RLX); reset keeps settings, PR #88 |
 | F15 | Fuzzy search keeps `y` | Post-launch [#33] |
@@ -312,7 +318,7 @@ Evidence and line numbers (at `60c6b32`) are in
 | F22 | `!gc` fallback delays collide: whole-second jitter, fixed 5 s BDR [R1, R2] | Open, H14 [#17] |
 | F23 | `!gc` cooldown is stamped only on the client that posted [R7] | Open, H14 [#17] |
 | F24 | `GC_ACK` goes out before the post; a failed post silences every responder [R8] | Fixed: PR #90 |
-| F25 | Shift-click link and `[W]` call `ChatEdit_InsertLink`/`ChatFrame_OpenChat` unguarded; Forever's UI uses `ChatFrameUtil` [U6] | Fixed in code by PR #79. CHL 2026-10-04: all four functions exist; the click check is open, H14 [#17] |
+| F25 | Shift-click link and `[W]` call `ChatEdit_InsertLink`/`ChatFrame_OpenChat` unguarded; Forever's UI uses `ChatFrameUtil` [U6] | Fixed by PR #79. Shift-click checked in game 2026-10-05; `[W]` needs a guildmate, H14 [#17] |
 | F26 | Messages from a sender whose name doesn't resolve are dropped silently, though the payload carries a GUID [R5, D2] | Fixed: payload-GUID fallback with roster checks, PR #94. Cold-start premise open, H4 [#7] |
 | F27 | `RegisterAddonMessagePrefix` result unchecked; a client that can't receive can still be elected DR [D1] | The registration result shows in `/gc report` (PR #50); the warning and keeping a deaf client out of the election are still open, H12 [#15] |
 | F28 | Any `HEARTBEAT` refreshes the DR watchdog, so a second DR keeps a dead one alive [D6, E1] | Fixed: PR #96 |
@@ -392,3 +398,4 @@ Evidence and line numbers (at `60c6b32`) are in
 [#65]: https://github.com/lxhwes/GuildCrafts-Forever/issues/65
 [#66]: https://github.com/lxhwes/GuildCrafts-Forever/issues/66
 [#80]: https://github.com/lxhwes/GuildCrafts-Forever/issues/80
+[#98]: https://github.com/lxhwes/GuildCrafts-Forever/issues/98
