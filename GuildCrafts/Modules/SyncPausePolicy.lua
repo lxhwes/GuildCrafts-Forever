@@ -12,6 +12,7 @@
 --
 -- Public API:
 --   GuildCrafts.SyncPausePolicy:ShouldPause() → boolean
+--   GuildCrafts.SyncPausePolicy:OnResume(owner, fn) — fn() when the last condition clears
 ----------------------------------------------------------------------
 local _, _ns = ... -- luacheck: ignore (WoW addon bootstrap)
 local GuildCrafts = _G.GuildCrafts
@@ -85,6 +86,7 @@ function SyncPausePolicy:OnCombatEnd()
         self._inCombat    = false
         self._combatTimer = nil
         GuildCrafts:Debug("SyncPausePolicy: combat grace expired — sync resumed")
+        self:NotifyIfResumed()
     end, GRACE_COMBAT)
     GuildCrafts:Debug("SyncPausePolicy: combat ended — grace timer started")
 end
@@ -100,6 +102,7 @@ function SyncPausePolicy:OnZoneEnter(_, isLogin)
             self._inTransition   = false
             self._transitionTimer = nil
             GuildCrafts:Debug("SyncPausePolicy: zone-transition grace expired — sync resumed")
+            self:NotifyIfResumed()
         end, GRACE_TRANSITION)
         GuildCrafts:Debug("SyncPausePolicy: zone transition detected — sync paused")
     end
@@ -117,9 +120,12 @@ function SyncPausePolicy:OnZoneEnter(_, isLogin)
         -- Just left an instance (or logged in outside one).
         -- Apply grace period before allowing sync traffic.
         self._instanceTimer = self:ScheduleTimer(function()
+            local wasInInstance = self._inInstance
             self._inInstance   = false
             self._instanceTimer = nil
             GuildCrafts:Debug("SyncPausePolicy: instance grace expired — sync resumed")
+            -- This timer also runs after every non-instance zone-in.
+            if wasInInstance then self:NotifyIfResumed() end
         end, GRACE_INSTANCE)
     end
 end
@@ -178,6 +184,7 @@ function SyncPausePolicy:SetRestrictionState(restrictionType, state)
     self._restrictions[restrictionType] = active or nil
     GuildCrafts:Debug("SyncPausePolicy: restriction", self._pausingTypes[restrictionType],
         active and "active — sync paused" or "lifted")
+    if not active then self:NotifyIfResumed() end
 end
 
 ----------------------------------------------------------------------
@@ -188,4 +195,17 @@ end
 function SyncPausePolicy:ShouldPause()
     return self._inCombat or self._inInstance or self._inTransition
         or next(self._restrictions) ~= nil
+end
+
+--- Registers fn to run each time the last pause condition clears, so work held
+--- during a pause can resume without polling. One callback per owner.
+function SyncPausePolicy:OnResume(owner, fn)
+    -- Not reset in OnInitialize: a module may register before this one initializes.
+    self._onResume = self._onResume or {}
+    self._onResume[owner] = fn
+end
+
+function SyncPausePolicy:NotifyIfResumed()
+    if self:ShouldPause() or not self._onResume then return end
+    for _, fn in pairs(self._onResume) do fn() end
 end
