@@ -145,15 +145,19 @@ Q7 ([#29]) is a `docs/ORIGIN.md` fix that can land any time before launch.
 ## Tooling (any time, never gating)
 
 Decided on 2026-10-02 from the legacynext reuse review. Not tracked as issues:
-- **Own vendor checkout of Gethe/wow-ui-source `forever`.** Pin it, and include
-  `Blizzard_Professions*`, `Blizzard_Communities`, `Blizzard_ChatFrame*`,
-  `Blizzard_APIDocumentationGenerated`, `SharedXML*` and `FrameXML*`. legacynext's checkout is
-  another project's shared state, and its sparse set lacks the professions and chat code.
-- **Copy and adapt legacynext's skills.** The sandbox can't write `.claude/skills`, so Alex
-  installs them:
-  - `forever-api-lookup`: re-bucket for Professions, Communities and ChatFrame;
-  - `ingame-script`: point it at `docs/ingame-commands.md`;
-  - `safe-commit`: add a hard fail on any diff to the five Classic TOCs or `Data/Data_*.lua`.
+- ~~**Own vendor checkout of Gethe/wow-ui-source `forever`.**~~ Superseded 2026-10-04: one
+  shared checkout at `~/code/wow-ui-source-forever`, outside both repos, so it's no longer
+  another project's state. Its sparse set now includes `Blizzard_Professions*`,
+  `Blizzard_Communities`, `Blizzard_ChatFrame*`, `Blizzard_GuildControlUI` and
+  `Blizzard_DeprecatedChatInfo`, alongside the API docs, `SharedXML*` and `FrameXML*`. Each
+  repo records the pin it last reconciled against (`.claude/forever-tools/pin`).
+- ~~**Copy and adapt legacynext's skills.**~~ Superseded 2026-10-04: copies drift, as
+  legacynext's own two copies of its queue did within a day. `forever-api-lookup`,
+  `ingame-script` and `beta-build-bump` come from the `forever-tools` plugin, enabled for this
+  project only. Settings that differ per project are in `.claude/forever-tools/config.env`;
+  the call-site buckets are re-bucketed for Professions, chat and guild there.
+  - Still open: a GuildCrafts `safe-commit` with a hard fail on any diff to the five Classic
+    TOCs or `Data/Data_*.lua`. It stays per project, because the gates differ.
 
 ---
 
@@ -239,7 +243,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 | 2026-10-02 | Forever members are keyed by GUID (`Modules/ForeverIdentity.lua`, Camelot TOC only) |
 | 2026-10-02 | Only `/gc drop` removes a profession that holds recipes |
 | 2026-10-02 | Jewelcrafting and Inscription are gated on the client's skill lines |
-| 2026-10-02 | Own vendor checkout; copy legacynext's skills rather than symlinking |
+| 2026-10-02 | ~~Own vendor checkout; copy legacynext's skills rather than symlinking~~ (superseded 2026-10-04) |
 | 2026-10-03 | Plain Lua 5.1 regression scripts in `tools/test-*.lua`, not busted |
 | 2026-10-03 | Documentation refresh in two cuts (D1). Inherited docs get history banners in place rather than moving to an archive |
 | 2026-10-03 | GitHub Issues is the tracker. This file keeps phases, gates and the ID index |
@@ -249,6 +253,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 | 2026-10-04 | H14 ([#17]) isn't a blocker unless a CHT, TELL or CHL probe reproduces a failure |
 | 2026-10-04 | G1 ([#60]) owns "known by" on recipe items; C6 ([#32]) covers recipe sources only |
 | 2026-10-04 | The changelog upload is tracked as H20 ([#80]) and lands before the first publish |
+| 2026-10-04 | One shared Forever checkout (`~/code/wow-ui-source-forever`) and the `forever-tools` plugin for the three shared skills, replacing the 10-02 own-checkout and copy decisions |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 
 ---

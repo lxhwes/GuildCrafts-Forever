@@ -5,8 +5,8 @@ commands, and it is kept current. This file only adds what a reviewer needs. CLA
 sections on the gist and on Codex review describe Claude's workflow, not yours.
 
 When reviewing:
-- WoW API source of truth: Gethe/wow-ui-source branch `forever` at pin 9a789c0, vendored at
-  `/Users/alex/code/legacynext/vendor/wow-ui-source`. Forever is a beta Mainline 1.60.1 client.
+- WoW API source of truth: Gethe/wow-ui-source branch `forever` at pin 9a789c0, a shared
+  checkout at `~/code/wow-ui-source-forever/wow-ui-source` (`PINS.md` beside it). Forever is a beta Mainline 1.60.1 client.
   Don't cite Retail or Classic API behaviour as fact. If the pin doesn't cover it, say it needs
   an in-game probe.
 - The `tools/` suites stub WoW and never run the client or the addon message transport. Weigh
