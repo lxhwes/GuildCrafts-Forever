@@ -28,7 +28,7 @@ guild. Nothing goes to guildmates until Phase 2's exit gate passes.
 
 - Issues [#4]–[#39] created from this plan, titled with their plan IDs. [#44] (H19) and [#45]
   (Q8) added from the CurseForge audit. [#51]–[#66] (N1–N9, G1–G7) added from the Later
-  backlog.
+  backlog. [#80] (H20) added 2026-10-04 from the open item in `docs/releasing.md`.
 - Labels: `blocker`, `hardening`, `testing`, `needs-ingame`, `post-launch`, and the existing
   `documentation`. The Later backlog added `feature`, `external`, `security` and `research`.
 - One milestone per phase, plus Post-launch and Later.
@@ -49,32 +49,36 @@ regardless of position.
 | ID | Issue | Item | Tags |
 |---|---|---|---|
 | H1 | [#4] | ~~CI: luacheck and the regression suites~~ | Done: PR #41, issue closed 2026-10-04 |
-| H2 | [#5] | Server time for sync revisions | `blocker`, `needs-ingame` |
+| H2 | [#5] | Server time for sync revisions | `blocker`, `hardening`, `needs-ingame` |
 | H3 | [#6] | Persist GUID → name (unverified); roster-based prune (F35) | `hardening`, `needs-ingame`; `blocker` if the GRO probe confirms F35 |
 | H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening` |
 | H5 | [#8] | ~~`/gc report`~~ | Done: PR #50, issue closed 2026-10-04 |
-| H6 | [#9] | Scan diagnostics | `hardening` |
+| H6 | [#9] | ~~Scan diagnostics~~ | Done: PR #76, issue closed 2026-10-04 |
 | H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame` |
-| H8 | [#11] | SyncPausePolicy follow-ups after Q2; silent send failures (F34) | `needs-ingame` |
+| H8 | [#11] | SyncPausePolicy follow-ups after Q2; silent send failures (F34) | `hardening`, `needs-ingame` |
 | H9 | [#12] | ~~`/gc drop` after an empty read~~ | Done: PR #43, issue closed 2026-10-04 |
-| H10 | [#13] | Guild views scanned as your own (F5) | `blocker`, `needs-ingame` |
+| H10 | [#13] | Guild views scanned as your own (F5) | `blocker`, `hardening`, `needs-ingame` |
 | H11 | [#14] | ~~Restore your own data from peers (F1)~~ | Done: PR #69, issue closed 2026-10-04 |
-| H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening` |
+| H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening`, `testing`, `needs-ingame` |
 | H13 | [#16] | ~~Favorites write booleans to SavedVariables~~ | Done: PR #67, issue closed 2026-10-04 |
-| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `blocker` for Phase 3 |
-| H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening` |
+| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure |
+| H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening`, `needs-ingame` |
 | H16 | [#19] | ~~Tooltip taint and rebuilds (F9, F10)~~ | Done: F10 in PR #41, F9 in PR #68, issue closed 2026-10-04 |
-| H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, needed for wave 2 |
-| H18 | [#21] | Release workflow guards | `hardening`, before the first publish |
-| H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`; F29 before wave 1, the rest before wave 3 |
+| H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`; needed for wave 2 |
+| H18 | [#21] | ~~Release workflow guards~~ | Done: PR #77, issue closed 2026-10-04 |
+| H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`, `needs-ingame`; F29 before wave 1, the rest before wave 3 |
+| H20 | [#80] | Changelog upload sends upstream history | `hardening`, before the first publish |
 | D1 cut 1 | [#3] | Documentation refresh, cut 1 | Merged 2026-10-03 |
 
 **Phase 1 exit gate:**
 - CI green on `main`.
-- Every `blocker` (H1, H2, H5, H9, H10, H14) merged. H1, H5 and H9 done (PRs #41, #50, #43).
+- Every `blocker` (H1, H2, H5, H9, H10) merged. H1, H5 and H9 done (PRs #41, #50, #43). H2 and
+  H10 remain. H14 isn't a blocker unless a CHT, TELL or CHL probe reproduces a failure (decided
+  2026-10-04).
 - The rest either merged or deferred in its issue with a reason.
 - H8 answered or explicitly deferred.
-- The GRO and CHL probes run. If GRO confirms F35 or CHL confirms F25, that fix is merged.
+- The GRO and CHL probes run. If GRO confirms F35, that fix is merged. The F25 fix is merged
+  (PR #79); CHL checks it in game.
 - D1 cut 1 merged. Done: PR [#3].
 
 ---
@@ -161,9 +165,9 @@ Decided on 2026-10-02 from the legacynext reuse review. Not tracked as issues:
 |---|---|---|
 | C4 | [#30] | Cooldowns from the modern scan |
 | C5 | [#31] | Forever recipe data from DB2s |
-| C6 | [#32] | Recipe sources and "known by" |
+| C6 | [#32] | Recipe sources ("known by" moved to G1 [#60]) |
 | F15 | [#33] | Fuzzy search keeps `y` |
-| — | [#34] | Compact sync encoding (protocol v4) |
+| — | [#34] | Compact sync encoding (protocol v5) |
 | — | [#35] | Decide on Blizzard's guild recipe API |
 | — | [#36] | UI/UX (fork review §3) |
 | — | [#37] | Code hygiene |
@@ -186,15 +190,15 @@ N: out of game (export, companion, web, Discord). N4's design gates every extern
 
 | ID | Issue | Item | Depends on |
 |---|---|---|---|
-| N1 | [#51] | `/gc export` copy frame | N2 [#52] for the opt-out filter; N1 can ship first |
-| N2 | [#52] | Per-character opt-out (audit X3) | [#34] if bundled with protocol v4 |
-| N3 | [#53] | Companion export block in SavedVariables | N1 [#51], N2 [#52], H3 [#6] |
+| N1 | [#51] | `/gc export` copy frame | N2 [#52] for the opt-out filter; N1 can ship first. EB and TIME probes |
+| N2 | [#52] | Per-character opt-out (audit X3) | — (takes protocol `VERSION` 4 on its own) |
+| N3 | [#53] | Companion export block in SavedVariables | N1 [#51], N2 [#52], H3 [#6]; CLUB probe |
 | N4 | [#54] | Design: companion, web and Discord bot (ADR + threat model) | N1 [#51] schema draft |
 | N5 | [#55] | Companion uploader | N3 [#53], N4 [#54], N6 [#56] |
-| N6 | [#56] | Web backend: tenancy, auth and isolation | N4 [#54] |
+| N6 | [#56] | Web backend: tenancy, auth and isolation | N4 [#54]; Cloudflare and Discord accounts |
 | N7 | [#57] | Web recipe book | N6 [#56] |
 | N8 | [#58] | Discord bot | N6 [#56] |
-| N9 | [#59] | Spike: does Blizzard's web API cover Forever? | — |
+| N9 | [#59] | ~~Spike: does Blizzard's web API cover Forever?~~ | Done: No, Battle.net's API doesn't cover Forever (PR #78), issue closed 2026-10-04 |
 
 G: in game.
 
@@ -214,9 +218,9 @@ G: in game.
 
 | # | Question | Issue | Answered by |
 |---|---|---|---|
-| Q1 | Full client build number for the 2026-10-02/03 runs | [#24] | H5 (`GetBuildInfo()` in the report) |
+| Q1 | Full client build number for the 2026-10-02/03 runs | [#24] | H5 has landed; closes when a `/gc report` `Client:` line is recorded |
 | Q2 | Does `ADDON_RESTRICTION_STATE_CHANGED` fire at a boss pull? | [#25] | The `RE` probe; unblocks H8 |
-| Q4 | Why the first `/gc dump` on 2026-10-02 stored nothing | [#26] | H5, H6 |
+| Q4 | Why the first `/gc dump` on 2026-10-02 stored nothing | [#26] | H5 and H6 have landed; needs the reproduction in the issue |
 | Q5 | Sender name and whisper reach for a guildmate on another server prefix | [#27] | Phase 2 two-client run |
 | Q6 | Does ChatThrottleLib v32 clear the chat taint in game? | [#28] | Wave 1 |
 | Q7 | Date and channel of [@dkruenbo](https://github.com/dkruenbo)'s two messages, for `docs/ORIGIN.md` | [#29] | Alex |
@@ -242,13 +246,16 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 | 2026-10-03 | H1: get luacheck to zero warnings first, then CI fails on any warning |
 | 2026-10-03 | Later backlog N1–N9, G1–G7 added from `spec/later-backlog.md`; N4 design gates all external services |
 | 2026-10-04 | N1–N8 specs in `spec/later/`. N2 marker tombstone-shaped; protocol `VERSION` 4 with N2 (#34 becomes v5); companion block in a separate `GuildCraftsExport` SavedVariable; external stack on Cloudflare Workers Paid in a new monorepo, multi-tenant with one tenant at launch |
+| 2026-10-04 | H14 ([#17]) isn't a blocker unless a CHT, TELL or CHL probe reproduces a failure |
+| 2026-10-04 | G1 ([#60]) owns "known by" on recipe items; C6 ([#32]) covers recipe sources only |
+| 2026-10-04 | The changelog upload is tracked as H20 ([#80]) and lands before the first publish |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 
 ---
 
 ## Finding index (fork review, 2026-09-28)
 
-Status as of `8f0dc69`.
+Status as of `eebe4c2`.
 
 | ID | Finding | Status |
 |---|---|---|
@@ -262,7 +269,7 @@ Status as of `8f0dc69`.
 | F8 | DR silent after a higher term | Open, H12 [#15]. The stale DR keeps answering `!gc` (audit R4) |
 | F9 | Tooltip debounce never debounces | Closed: one rebuild per sync burst and one in-combat retry, H16 PR #68 |
 | F10 | Tooltip writes the global `_` | Closed: fixed by H1's zero-warning pass (PR #41) |
-| F11 | Scan retries uncapped | Open, H15 [#18] |
+| F11 | Scan retries uncapped | Retries capped at 10 with one pending timer (PR #76); event rework, cancel on window close and token still open, H15 [#18] |
 | F12 | Categories lost (`categoryName`) | Open, H15 [#18] |
 | F13 | Election watchdog resets on every recompute | Open, H12 [#15] |
 | F14 | `/gc reset` calls `ReloadUI()` | Open, H7 [#10] |
@@ -271,14 +278,14 @@ Status as of `8f0dc69`.
 | F17 | Identity split on Forever | Fixed (`9faf497`) |
 | F18 | ChatThrottleLib v31 taint | Library updated to v32 (`a1c0554`); not yet checked in game, Q6 [#28] |
 | F19 | Empty read purges every profession | Fixed (`fd788e6`, `f0522c4`); the last hole, H9 [#12], fixed by PR #43 |
-| F20 | Whisper button breaks two-word names | Open, H14 [#17] |
-| F21 | Empty profession name stops the scan | Open, H15 [#18] |
+| F20 | Whisper button breaks two-word names | Fixed in code by PR #79; not yet checked in game, H14 [#17] |
+| F21 | Empty profession name stops the scan | Logged (PR #76), not fixed, H15 [#18] |
 | C1 | First Aid and Fishing untracked; JC/Inscription rows | JC/Inscription gated (`c16b09f`); First Aid and Fishing open, H17 [#20] |
 | C2 | Gathering recipes hidden | Open, H17 [#20]. `TradeSkillRecipeInfo.isGatheringRecipe` exists at the pin (audit X6) |
 | C3 | TBC specialisation table | Open, H17 [#20]. The table hard-codes spell IDs, against the project rule; decide whether it's an accepted exception (audit X5) |
 | C4 | No cooldowns from the modern scan | Post-launch [#30] |
 | C5 | Every recipe tagged Vanilla | Post-launch [#31] |
-| C6 | Recipe sources empty | Post-launch [#32] |
+| C6 | Recipe sources empty | Post-launch [#32], recipe sources only; "known by" is G1 [#60] |
 
 ## Finding index (CurseForge comment audit, 2026-10-03)
 
@@ -290,16 +297,16 @@ Evidence and line numbers (at `60c6b32`) are in
 | F22 | `!gc` fallback delays collide: whole-second jitter, fixed 5 s BDR [R1, R2] | Open, H14 [#17] |
 | F23 | `!gc` cooldown is stamped only on the client that posted [R7] | Open, H14 [#17] |
 | F24 | `GC_ACK` goes out before the post; a failed post silences every responder [R8] | Open, H14 [#17] |
-| F25 | Shift-click link and `[W]` call `ChatEdit_InsertLink`/`ChatFrame_OpenChat` unguarded; Forever's UI uses `ChatFrameUtil` [U6] | Open, H14 [#17]; CHL probe |
-| F26 | Messages from a sender whose name doesn't resolve are dropped silently, though the payload carries a GUID [R5, D2] | Open, H4 [#7] |
-| F27 | `RegisterAddonMessagePrefix` result unchecked; a client that can't receive can still be elected DR [D1] | Open, H12 [#15] |
+| F25 | Shift-click link and `[W]` call `ChatEdit_InsertLink`/`ChatFrame_OpenChat` unguarded; Forever's UI uses `ChatFrameUtil` [U6] | Fixed in code by PR #79; not yet checked in game (CHL probe), H14 [#17] |
+| F26 | Messages from a sender whose name doesn't resolve are dropped silently, though the payload carries a GUID [R5, D2] | Logging and a drop count landed in PR #50; the payload-GUID fallback is still open, H4 [#7] |
+| F27 | `RegisterAddonMessagePrefix` result unchecked; a client that can't receive can still be elected DR [D1] | The registration result shows in `/gc report` (PR #50); the warning and keeping a deaf client out of the election are still open, H12 [#15] |
 | F28 | Any `HEARTBEAT` refreshes the DR watchdog, so a second DR keeps a dead one alive [D6, E1] | Open, H12 [#15] |
 | F29 | A paused DR drains its whole sync queue in one frame and discards the work [P2] | Open, H19 [#44] |
 | F30 | Each login makes every online client send a full-vector `SYNC_REQUEST` [P4] | Open, H19 [#44] |
 | F31 | Every zone change sends `HELLO` plus a `SYNC_REQUEST`, with no pending-sync guard [P5] | Open, H19 [#44] |
 | F32 | Every `TRADE_SKILL_LIST_UPDATE` runs a full profession scan [P6] | Open, H15 [#18] |
 | F33 | Two roster passes per `GUILD_ROSTER_UPDATE`; `UI:Refresh` on every delta with no debounce [P7, P8] | Open, H19 [#44]; measure (M2) before fixing |
-| F34 | Send failures other than throttling are dropped silently, `HELLO` included [D5] | Open, H8 [#11]; logging in H6 [#9] |
+| F34 | Send failures other than throttling are dropped silently, `HELLO` included [D5] | Send-failure logging and a counter landed in PR #76; telling `AddOnMessageLockdown` apart and retrying are still open, H8 [#11] |
 | F35 | `PruneRoster` trusts any roster with two rows; an online-only roster would tombstone members offline 7+ days [L2, L3] | Open, H3 [#6]; GRO probe |
 | F36 | The 45-day prune writes no tombstone, and ex-members revive after tombstone expiry [L4] | Open, H12 [#15] |
 | F37 | `!gc` misses `\|Hspell:` links and recipe links for item-producing recipes [`!gc` (c), U6] | Post-launch [#36] |
@@ -369,3 +376,4 @@ Evidence and line numbers (at `60c6b32`) are in
 [#64]: https://github.com/lxhwes/GuildCrafts-Forever/issues/64
 [#65]: https://github.com/lxhwes/GuildCrafts-Forever/issues/65
 [#66]: https://github.com/lxhwes/GuildCrafts-Forever/issues/66
+[#80]: https://github.com/lxhwes/GuildCrafts-Forever/issues/80
