@@ -162,7 +162,7 @@ lua5.1 tools/test-profession-gate.lua   # Jewelcrafting/Inscription skill-line g
 lua5.1 tools/test-report.lua            # /gc report and the debug ring buffer
 lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
 lua5.1 tools/test-tooltip-index.lua     # tooltip index rebuild debounce (F9)
-bash tools/test-release-preflight.sh     # release.yml publish refusals (H18)
+bash tools/test-release-preflight.sh     # release.yml publish refusals (H18), release notes (H20)
 lua5.1 tools/test-chat-links.lua        # chat links, [W] two-word whisper target (F25, F20)
 ```
 

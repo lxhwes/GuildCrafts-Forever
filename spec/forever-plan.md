@@ -51,23 +51,23 @@ regardless of position.
 | H1 | [#4] | ~~CI: luacheck and the regression suites~~ | Done: PR #41, issue closed 2026-10-04 |
 | H2 | [#5] | Server time for sync revisions | `blocker`, `hardening`, `needs-ingame`. `TIME` probed 2026-10-04: `GetServerTime()` is 3 s from the local clock |
 | H3 | [#6] | ~~Persist GUID → name (unverified); roster-based prune (F35)~~ | Closed as rejected 2026-10-04: GRO didn't reproduce it |
-| H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening` |
+| H4 | [#7] | Sender resolution: cold start (unverified) and unresolved senders dropped (F26) | `hardening`. Phase 1 (2026-10-04): the payload-GUID fallback for F26. The cold-start premise is read from `/gc report`'s unresolved-sender count in the Phase 2 run |
 | H5 | [#8] | ~~`/gc report`~~ | Done: PR #50, issue closed 2026-10-04 |
 | H6 | [#9] | ~~Scan diagnostics~~ | Done: PR #76, issue closed 2026-10-04 |
-| H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame`. RLX 2026-10-04: `ReloadUI()` isn't protected; what reset clears is still open |
-| H8 | [#11] | SyncPausePolicy follow-ups after Q2; silent send failures (F34) | `hardening`, `needs-ingame` |
+| H7 | [#10] | `/gc reset` and `ReloadUI()` (F14) | `hardening`, `needs-ingame`. RLX 2026-10-04: `ReloadUI()` isn't protected. Phase 1: reset keeps settings and says what it cleared (PR #88) |
+| H8 | [#11] | SyncPausePolicy follow-ups after Q2; silent send failures (F34) | `hardening`, `needs-ingame`. Deferred to wave 1 on 2026-10-04: it waits on Q2's `RE` run |
 | H9 | [#12] | ~~`/gc drop` after an empty read~~ | Done: PR #43, issue closed 2026-10-04 |
 | H10 | [#13] | Guild views scanned as your own (F5) | `hardening`, `needs-ingame`. Not a blocker since 2026-10-04: 70205 has no guild view. Guard in PR #85 |
 | H11 | [#14] | ~~Restore your own data from peers (F1)~~ | Done: PR #69, issue closed 2026-10-04 |
-| H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening`, `testing`, `needs-ingame` |
+| H12 | [#15] | Sync robustness (F7, F8, F13, F27, F28, F36 and three more) | `hardening`, `testing`, `needs-ingame`. Phase 1 (2026-10-04): F8, F13, F28. Deferred to wave 1: F7, F27, F36, BDR eviction, paused deltas, returning DR |
 | H13 | [#16] | ~~Favorites write booleans to SavedVariables~~ | Done: PR #67, issue closed 2026-10-04 |
-| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure. CHT 2026-10-04: the global `SendChatMessage` that `!gc` calls is a deprecation shim behind the `loadDeprecationFallbacks` CVar |
-| H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening`, `needs-ingame` |
+| H14 | [#17] | Chat and whisper on Forever (F4, F20, F22–F25) | `hardening`, `needs-ingame`; `blocker` only if a CHT, TELL or CHL probe reproduces a failure. Phase 1 (2026-10-04): `C_ChatInfo.SendChatMessage`, F4, F24. Deferred to wave 1: F22, F23, which need several responders |
+| H15 | [#18] | Scan gate and categories (F11, F12, F16, F21, F32) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F12, F16, F21 (PR #89). F11's event rework and F32 move to H19 for wave 3 |
 | H16 | [#19] | ~~Tooltip taint and rebuilds (F9, F10)~~ | Done: F10 in PR #41, F9 in PR #68, issue closed 2026-10-04 |
-| H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`; needed for wave 2 |
+| H17 | [#20] | Profession coverage (C1/F3, C2, C3) | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): the empty-search copy (PR #87). C1–C3 deferred to wave 2; PROFX probe queued |
 | H18 | [#21] | ~~Release workflow guards~~ | Done: PR #77, issue closed 2026-10-04 |
-| H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`, `needs-ingame`; F29 before wave 1, the rest before wave 3 |
-| H20 | [#80] | Changelog upload sends upstream history | `hardening`, before the first publish |
+| H19 | [#44] | Sync load and frame time (F29–F31, F33), measured with M1–M4 | `hardening`, `needs-ingame`. Phase 1 (2026-10-04): F29. Deferred to wave 3: F30, F31, F33, M1–M4, and F11/F32 from H15 |
+| H20 | [#80] | Changelog upload sends upstream history | `hardening`, before the first publish. Phase 1 (2026-10-04): per-version notes generated in `release.yml` |
 | D1 cut 1 | [#3] | Documentation refresh, cut 1 | Merged 2026-10-03 |
 
 **Phase 1 exit gate:**
@@ -75,8 +75,9 @@ regardless of position.
 - Every `blocker` (H1, H2, H5, H9) merged. H1, H5 and H9 done (PRs #41, #50, #43). H2 remains.
   H10 stopped being a blocker on 2026-10-04, because 70205 offers no guild view. H14 isn't a blocker unless a CHT, TELL or CHL probe reproduces a failure (decided
   2026-10-04).
-- The rest either merged or deferred in its issue with a reason.
-- H8 answered or explicitly deferred.
+- The rest either merged or deferred in its issue with a reason. Scope decided 2026-10-04: each
+  row above says what lands in Phase 1 and what's deferred, and each issue carries the reason.
+- H8 answered or explicitly deferred. Deferred to wave 1 on 2026-10-04, with Q2.
 - The GRO and CHL probes run. Done 2026-10-04: GRO didn't confirm F35, and CHL found the
   `ChatFrameUtil` functions PR #79 uses. The click check for F25 is still open.
 - D1 cut 1 merged. Done: PR [#3].
@@ -112,6 +113,12 @@ DR/BDR election behaviour at 20+ online is the part nobody has exercised.
 | 3 | Open to the guild | Everyone | Load, election at scale, performance |
 
 Each wave runs ~3 days. Move on only when the previous wave has no open `blocker`.
+
+Deferred from Phase 1 on 2026-10-04, by the wave that needs them:
+- Wave 1: H8 and Q2; H12's F7, F27, F36, BDR eviction, paused deltas and returning DR; H14's
+  F22 and F23.
+- Wave 2: H17's C1–C3.
+- Wave 3: H19's F30, F31, F33 and M1–M4; H15's F11 event rework and F32.
 
 **Feedback channel:** one guild Discord thread, pinned instructions: install, open each
 profession window once, `/gc report` and paste it when anything looks wrong. Every report
@@ -222,8 +229,8 @@ G: in game.
 
 | # | Question | Issue | Answered by |
 |---|---|---|---|
-| Q2 | Does `ADDON_RESTRICTION_STATE_CHANGED` fire at a boss pull? | [#25] | The `RE` probe; unblocks H8 |
-| Q4 | Why the first `/gc dump` on 2026-10-02 stored nothing | [#26] | H5 and H6 have landed; needs the reproduction in the issue |
+| Q2 | Does `ADDON_RESTRICTION_STATE_CHANGED` fire at a boss pull? | [#25] | The `RE` probe at the next dungeon; deferred to wave 1 with H8 (2026-10-04) |
+| Q4 | Why the first `/gc dump` on 2026-10-02 stored nothing | [#26] | `/gc report` after step C1 of the Phase 2 two-client run, which starts from empty SavedVariables (2026-10-04) |
 | Q5 | Sender name and whisper reach for a guildmate on another server prefix | [#27] | Phase 2 two-client run |
 | Q6 | Does ChatThrottleLib v32 clear the chat taint in game? | [#28] | Wave 1 |
 | Q7 | Date and channel of [@dkruenbo](https://github.com/dkruenbo)'s two messages, for `docs/ORIGIN.md` | [#29] | Alex |
@@ -256,6 +263,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed. Q1 ([#24], cli
 | 2026-10-04 | One shared Forever checkout (`~/code/wow-ui-source-forever`) and the `forever-tools` plugin for the three shared skills, replacing the 10-02 own-checkout and copy decisions |
 | 2026-10-04 | H3 ([#6]) closed as rejected: GRO showed the roster lists offline members with GUIDs |
 | 2026-10-04 | H10 ([#13]) isn't a blocker: 70205 offers no guild view. The scan guard still lands as insurance |
+| 2026-10-04 | Phase 1 close-out: Phase 1 takes H2, H4's F26 fallback, H7, H12's F8/F13/F28, H14's send API, F4 and F24, H15's F12/F16/F21, H17's search copy, H19's F29 and H20. The rest is deferred to the wave that needs it (Phase 3) |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 
 ---

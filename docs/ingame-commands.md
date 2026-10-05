@@ -64,6 +64,14 @@ Run after login, no window open. One line per `GetProfessions()` slot (1-7): slo
 /run local t={GetProfessions()};for i=1,7 do local x=t[i];print("PROF",i,x,x and (GetProfessionInfo(x)));end;
 ```
 
+## PROFX
+
+Run after login, no window open (H17). One line per occupied `GetProfessions()` slot 1-5: slot, name, rank, max rank, number of spells, skill line ID and skill line name, read in the order Forever's ProfessionsBook reads them (`Blizzard_ProfessionsBook/Camelot/Blizzard_ProfessionsBook.lua:57` at e3ecc27). Slots 3 and 4 show First Aid's and Fishing's skill lines, which the PSL list leaves out. Then run TS with the First Aid window open, then with Fishing if it opens a window, and with Smelting open to see whether it scans as Mining.
+
+```
+/run local t={GetProfessions()};for i=1,5 do local x=t[i];if x then local n,_,r,m,s,_,l,_,_,_,k=GetProfessionInfo(x);print("PROFX",i,n,r,m,s,l,k);end;end;
+```
+
 ## SKL
 
 Run anywhere. `true`/`false` for whether each skill-line API exists: `C_SkillLine`, global `GetNumSkillLines`, global `GetSkillLineInfo`, `C_SkillInfo`. GuildCrafts falls back to the first three when `GetProfessions()` returns nothing.
