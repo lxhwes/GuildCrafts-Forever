@@ -268,6 +268,7 @@ local DB_DEFAULTS = {
         --     },
         --     lastUpdate = timestamp,
         -- }
+        -- A setting added to global must also go in GLOBAL_SETTINGS, or /gc reset clears it.
         minimap = {
             hide        = false,
             minimapPos  = 45,  -- degrees, top-right
@@ -287,6 +288,9 @@ local DB_DEFAULTS = {
         showTooltipCrafters = true,
     },
 }
+
+-- db.global keys that hold settings rather than guild or recipe data.
+local GLOBAL_SETTINGS = { minimap = true }
 
 ----------------------------------------------------------------------
 -- Lifecycle
@@ -311,6 +315,21 @@ end
 
 function Data:OnEnable()
     self:ApplyClientProfessionGate()
+end
+
+--- Clear every guild's members, recipes and sync state, and the shared
+--- recipe cache. Settings in GLOBAL_SETTINGS and db.profile are kept, and
+--- GuildCraftsCharDB (favorites, debug log) is never touched.
+function Data:ResetData()
+    local global = self.db.global
+    -- In place, so AceDB keeps the table it saves at logout.
+    for key in pairs(global) do
+        if not GLOBAL_SETTINGS[key] then
+            global[key] = nil
+        end
+    end
+    self._guildMigrated = nil
+    self._memberKeysNormalized = nil
 end
 
 ----------------------------------------------------------------------
