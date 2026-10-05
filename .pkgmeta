@@ -31,6 +31,7 @@ ignore:
   - docs
   - RFC
   - tools
+  - AGENTS.md
   - CLAUDE.md
   - CONTRIBUTING.md
   - CURSEFORGE_DESCRIPTION.md
