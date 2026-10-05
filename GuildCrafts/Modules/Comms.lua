@@ -35,6 +35,7 @@ local HELLO_DELAY          = 3       -- delay after login before sending HELLO
 local SYNC_DELAY           = 15      -- delay after HELLO before SYNC_REQUEST
 local HEARTBEAT_INTERVAL   = 60      -- DR heartbeat broadcast interval
 local HEARTBEAT_TIMEOUT    = 180     -- 3 missed heartbeats → DR presumed dead
+local HEARTBEAT_OVERDUE    = 90      -- 1 missed heartbeat: enough to back a retry>=2 eviction
 local SYNC_TIMEOUT         = 120     -- wait for SYNC_RESPONSE before retry
 local SYNC_RETRY_TIMEOUT   = 15      -- wait for retry response before open round
 local SYNC_CHUNK_SIZE      = 5       -- max members per sync chunk
@@ -393,9 +394,12 @@ function Comms:RecomputeElection()
         end
     end
 
-    -- Always ensure DR watchdog is running if we're not DR
+    -- Watch the DR when we're not it. Restart only for a new DR: restarting on every
+    -- recompute let HELLO traffic keep a logged-off DR elected (F13).
     if self.myRole ~= "DR" and self.currentDR then
-        self:StartDRWatchdog()
+        if not self.drWatchdogTimer or self._watchdogDR ~= self.currentDR then
+            self:StartDRWatchdog()
+        end
     else
         self:StopDRWatchdog()
     end
@@ -443,7 +447,6 @@ function Comms:HandleHeartbeat(payload)
     -- RecomputeElection() always has complete peer information.
     local heartbeatKey = GuildCrafts.Data:NormalizeMemberKey(payload.dr)
     if heartbeatKey then
-        self.lastDRHeartbeat = time()
         if not self.addonUsers[heartbeatKey] then
             self.addonUsers[heartbeatKey] = {
                 version  = 1,
@@ -465,6 +468,11 @@ function Comms:HandleHeartbeat(payload)
     -- Always recompute after a valid heartbeat so currentDR/BDR stay accurate
     -- in the sync panel and role change log.
     self:RecomputeElection()
+    -- Only our DR's heartbeat proves it alive. Any other one kept a logged-off DR
+    -- elected after a character switch (F28).
+    if heartbeatKey and heartbeatKey == self.currentDR then
+        self.lastDRHeartbeat = time()
+    end
     if GuildCrafts.UI and GuildCrafts.UI.UpdateSyncIndicator then
         GuildCrafts.UI:UpdateSyncIndicator()
     end
@@ -477,6 +485,7 @@ end
 function Comms:StartDRWatchdog()
     self:StopDRWatchdog()
     self.lastDRHeartbeat = time() -- assume alive now
+    self._watchdogDR = self.currentDR
     self.drWatchdogTimer = self:ScheduleRepeatingTimer("CheckDRAlive", HEARTBEAT_INTERVAL)
 end
 
@@ -485,6 +494,17 @@ function Comms:StopDRWatchdog()
         self:CancelTimer(self.drWatchdogTimer)
         self.drWatchdogTimer = nil
     end
+    self._watchdogDR = nil
+end
+
+local function InInstance()
+    return IsInInstance ~= nil and select(1, IsInInstance()) and true or false
+end
+
+--- True when we, not the DR, have missed at least one of the DR's heartbeats.
+function Comms:IsDRHeartbeatOverdue()
+    if self.myRole == "DR" or not self.currentDR or InInstance() then return false end
+    return time() - self.lastDRHeartbeat > HEARTBEAT_OVERDUE
 end
 
 function Comms:CheckDRAlive()
@@ -496,8 +516,7 @@ function Comms:CheckDRAlive()
     -- GUILD addon messages are not delivered while inside an instance or arena.
     -- Suppress the DR eviction timer so we don't falsely elect ourselves just
     -- because we temporarily can't receive heartbeats.
-    local inInstance = IsInInstance and select(1, IsInInstance())
-    if inInstance then
+    if InInstance() then
         self.lastDRHeartbeat = time()  -- keep the timer fresh
         return
     end
@@ -663,19 +682,23 @@ function Comms:HandleSyncRequest(payload, sender)
     elseif retryCount == 1 and (self.myRole == "DR" or self.myRole == "BDR") then
         shouldRespond = true
     elseif retryCount >= 2 then
-        -- DR and BDR both failed to respond — evict and re-elect.
-        -- Only the newly elected DR responds, preventing a flood.
+        -- The requester says the DR and BDR both failed. Evict and re-elect only if
+        -- we've missed the DR's heartbeat too: one client's lost messages must not
+        -- evict a live DR guild-wide (F13). Only the newly elected DR responds.
         -- Skip eviction for peers still inside the backoff window — they may be
-        -- transiently slow. Peers with count < 2 (not yet in backoff) are evicted
-        -- as before.
+        -- transiently slow.
         local function shouldEvict(key)
             return key and key ~= playerKey and not self:IsPeerBackedOff(key)
         end
-        if shouldEvict(self.currentDR)  then self.addonUsers[self.currentDR]  = nil end
-        if shouldEvict(self.currentBDR) then self.addonUsers[self.currentBDR] = nil end
-        self:RecomputeElection()
-        if self.myRole == "DR" then
-            shouldRespond = true
+        if self:IsDRHeartbeatOverdue() then
+            if shouldEvict(self.currentDR)  then self.addonUsers[self.currentDR]  = nil end
+            if shouldEvict(self.currentBDR) then self.addonUsers[self.currentBDR] = nil end
+            self:RecomputeElection()
+            shouldRespond = self.myRole == "DR"
+        else
+            -- A heartbeating DR may still be paused or unreachable by whisper, so the
+            -- peer the requester re-elected answers too, and nobody changes role.
+            shouldRespond = self.myRole == "DR" or self:IsOpenRoundStandIn(requester)
         end
     end
 
@@ -813,7 +836,21 @@ function Comms:QueuedSyncRequestDropReason(entry, now)
     end
     if self.myRole == "DR" then return nil end
     if entry.retry == 1 and self.myRole == "BDR" then return nil end
+    if (entry.retry or 0) >= 2 and self:IsOpenRoundStandIn(entry.requester) then return nil end
     return "no longer " .. (entry.retry == 1 and "DR or BDR" or "DR")
+end
+
+--- True if we are the peer a retry>=2 requester re-elected: the first addon user
+--- after our DR, our BDR and the requester itself.
+function Comms:IsOpenRoundStandIn(requester)
+    local first
+    for key in pairs(self.addonUsers) do
+        if key ~= self.currentDR and key ~= self.currentBDR and key ~= requester
+                and (not first or key < first) then
+            first = key
+        end
+    end
+    return first ~= nil and first == GuildCrafts.Data:GetPlayerKey()
 end
 
 function Comms:QueueSyncRequest(requester, payload, retryCount)
@@ -1755,12 +1792,14 @@ function Comms:ProcessIncoming(message, distribution, sender)
     -- This corrects a node that missed term increments while inside an instance
     -- (where GUILD addon messages are not delivered). A stale DR will step down
     -- as soon as it receives any message from the updated network.
+    local steppedDown = false
     if type(envelope.term) == "number" and envelope.term > self.currentTerm then
         GuildCrafts:Debug("Higher term", envelope.term, "adopted from", msgType, "by", sender)
         self.currentTerm = envelope.term
         if self.myRole == "DR" then
             GuildCrafts:Debug("Stepping down — higher-term authority arrived via", msgType)
             self:StopHeartbeat()
+            steppedDown = true
             -- Do NOT set myRole or call RecomputeElection here: the sender is not
             -- yet registered in addonUsers. The specific message handler (e.g.
             -- HandleHeartbeat) will register the sender and run RecomputeElection
@@ -1808,6 +1847,15 @@ function Comms:ProcessIncoming(message, distribution, sender)
         self:TouchAddonUser(sender)
     else
         GuildCrafts:Debug("Unknown message type:", msgType, "from", sender)
+    end
+
+    -- Still DR once the sender is known: resume heartbeats on the adopted term (F8).
+    if steppedDown then
+        self:RecomputeElection()
+        if self.myRole == "DR" and not self.heartbeatTimer then
+            GuildCrafts:Debug("Still DR on term", self.currentTerm, "— resuming heartbeats")
+            self:StartHeartbeat()
+        end
     end
 
     -- Remember a key that only the fallback put in addonUsers, so a revocation can undo it.
