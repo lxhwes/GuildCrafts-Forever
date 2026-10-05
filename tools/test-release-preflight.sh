@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Release preflight regressions (.github/scripts/release-preflight.sh, H18 #21) against a scratch repo.
+# Release preflight regressions (.github/scripts/release-preflight.sh, H18 #21) against a scratch repo,
+# then tools/test-release-notes.sh (H20 #80).
 # Run from the repository root: bash tools/test-release-preflight.sh
 set -u
 
@@ -64,6 +65,10 @@ expect 1 "also a branch" "a tag that shares a branch name refuses to publish" re
 
 if [[ $failed -ne 0 ]]; then
     echo "$failed release preflight regression(s) failed"
-    exit 1
+else
+    echo "$passed release preflight regressions passed"
 fi
-echo "$passed release preflight regressions passed"
+
+# CI runs this file only, so it carries the release-notes suite (H20) too.
+bash "$(dirname "$0")/test-release-notes.sh" || failed=$((failed + 1))
+[[ $failed -eq 0 ]] || exit 1

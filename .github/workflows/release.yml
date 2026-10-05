@@ -15,6 +15,9 @@ name: Release (Forever only)
 # Before any of that, ci.yml runs on the same commit (lint and every suite), and a
 # publishing run must pass .github/scripts/release-preflight.sh: a CF_API_KEY, and HEAD
 # carrying exactly one tag, a v* tag that isn't also a branch name.
+#
+# .github/scripts/release-notes.sh then writes this version's CHANGELOG.md section to
+# .release-notes.md, the .pkgmeta manual-changelog, and fails a tag build with no section.
 
 on:
   push:
@@ -68,6 +71,13 @@ jobs:
           # true/false only; the token itself never enters this step.
           HAS_CF_API_KEY: ${{ secrets.CF_API_KEY != '' }}
         run: bash .github/scripts/release-preflight.sh
+
+      - name: Write this version's release notes for manual-changelog
+        env:
+          REF: ${{ inputs.ref || github.ref }}
+        run: |
+          bash .github/scripts/release-notes.sh
+          echo "::group::.release-notes.md"; cat .release-notes.md; echo "::endgroup::"
 
       - name: Check out the packager at a pinned commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -140,6 +150,13 @@ jobs:
         with:
           name: guildcrafts-forever
           path: ${{ runner.temp }}/release/*.zip
+
+      - name: Keep the release notes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: .release-notes.md
+          include-hidden-files: true   # the file is a dotfile so the packager won't zip it
 
       - name: Publish the checked package
         if: env.PUBLISH == 'true'
