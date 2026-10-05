@@ -471,7 +471,7 @@ Sim.__index = Sim
 -- members: { { "Name Surname", guid }, ... }, all online in the roster.
 local function newSim(members)
     local sim = setmetatable({ nodes = {}, byName = {}, byGuid = {}, queue = {}, wire = {},
-        timers = {}, sends = {}, blocked = {} }, Sim)
+        timers = {}, sends = {}, blocked = {}, blockedWhisper = {} }, Sim)
     roster = {}
     for i, member in ipairs(members) do
         roster[i] = { member[1], true, member[2] }
@@ -563,8 +563,9 @@ function Sim:flush()
         assert(delivered < 5000, "message storm")
         local m = table.remove(self.queue, 1)
         for _, node in ipairs(self.nodes) do
-            local reaches = node.online and m.from.online
-                and not self.blocked[m.from.name .. ">" .. node.name]
+            local link = m.from.name .. ">" .. node.name
+            local reaches = node.online and m.from.online and not self.blocked[link]
+                and not (m.distribution == "WHISPER" and self.blockedWhisper[link])
                 and (m.distribution == "GUILD" or node.name == m.target)
             if reaches then
                 activeNode = node
@@ -721,7 +722,8 @@ test("election F13: a retry>=2 request doesn't evict a DR that is still heartbea
     sim:advance(30)
     for _, s in ipairs(sim.sends) do
         if s.t == "SYNC_RESPONSE" and s.at >= since then
-            assert(s.from == "Ari Ash", s.from .. " answered the open round")
+            -- Cid is who Dov re-elected; it answers in case the DR's reply is lost again.
+            assert(s.from == "Ari Ash" or s.from == "Cid Cedar", s.from .. " answered the open round")
         end
     end
     assert(sim:lastSend("Ari Ash", "SYNC_RESPONSE", since), "the DR didn't answer")
@@ -755,6 +757,55 @@ test("election F13: a paused DR keeps its role and answers the open round on res
     ariNode.Comms:OnSyncPauseLifted()
     sim:flush()
     assert(sim:lastSend("Ari Ash", "SYNC_RESPONSE", since), "DR didn't answer after the pause")
+    sim:advance(60)
+    sim:assertAgreed("Ari Ash")
+end)
+
+-- name sends a fresh SYNC_REQUEST and runs its whole retry chain: 120 s, 15 s, then the open round.
+local function syncChain(sim, name)
+    local node = sim.byName[name]
+    node.Comms.syncRetryCount = 0
+    activeNode = node
+    node.Comms:SendSyncRequest()
+    activeNode = nil
+    sim:flush()
+    sim:advance(Comms.SYNC_TIMEOUT + Comms.SYNC_RETRY_TIMEOUT + 5)
+end
+
+local function assertKeptRoles(sim, names, term)
+    for _, name in ipairs(names) do
+        local c = sim.byName[name].Comms
+        assert(c.addonUsers[ari] and c.addonUsers[bel], name .. " evicted the DR or BDR")
+        assert(c.currentTerm == term, name .. " moved to term " .. c.currentTerm)
+    end
+end
+
+test("election F13: a paused DR and BDR keep their roles and the requester still syncs", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar", "Dov Dune")
+    local term, since = sim.byName["Ari Ash"].Comms.currentTerm, now
+    local paused = true
+    for _, name in ipairs({ "Ari Ash", "Bel Birch" }) do
+        sim.byName[name].addon.SyncPausePolicy = { ShouldPause = function() return paused end }
+    end
+    syncChain(sim, "Dov Dune")
+    assert(sim:lastSend("Cid Cedar", "SYNC_RESPONSE", since), "nobody answered the open round")
+    local dovComms = sim.byName["Dov Dune"].Comms
+    assert(not dovComms.syncPending and (dovComms.lastSyncCompletedAt or 0) >= since, "Dov never synced")
+    assertKeptRoles(sim, { "Bel Birch", "Cid Cedar" }, term)
+    paused = false
+    sim:advance(60)
+    sim:assertAgreed("Ari Ash")
+end)
+
+test("election F13: lost replies from a heartbeating DR and BDR still end in a sync", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar", "Dov Dune")
+    local term, since = sim.byName["Ari Ash"].Comms.currentTerm, now
+    sim.blockedWhisper["Ari Ash>Dov Dune"] = true
+    sim.blockedWhisper["Bel Birch>Dov Dune"] = true
+    syncChain(sim, "Dov Dune")
+    local dovComms = sim.byName["Dov Dune"].Comms
+    assert(not dovComms.syncPending and (dovComms.lastSyncCompletedAt or 0) >= since, "Dov never synced")
+    assertKeptRoles(sim, { "Bel Birch", "Cid Cedar" }, term)
     sim:advance(60)
     sim:assertAgreed("Ari Ash")
 end)

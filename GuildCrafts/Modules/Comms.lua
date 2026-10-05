@@ -694,9 +694,11 @@ function Comms:HandleSyncRequest(payload, sender)
             if shouldEvict(self.currentDR)  then self.addonUsers[self.currentDR]  = nil end
             if shouldEvict(self.currentBDR) then self.addonUsers[self.currentBDR] = nil end
             self:RecomputeElection()
-        end
-        if self.myRole == "DR" then
-            shouldRespond = true
+            shouldRespond = self.myRole == "DR"
+        else
+            -- A heartbeating DR may still be paused or unreachable by whisper, so the
+            -- peer the requester re-elected answers too, and nobody changes role.
+            shouldRespond = self.myRole == "DR" or self:IsOpenRoundStandIn(requester)
         end
     end
 
@@ -834,7 +836,21 @@ function Comms:QueuedSyncRequestDropReason(entry, now)
     end
     if self.myRole == "DR" then return nil end
     if entry.retry == 1 and self.myRole == "BDR" then return nil end
+    if (entry.retry or 0) >= 2 and self:IsOpenRoundStandIn(entry.requester) then return nil end
     return "no longer " .. (entry.retry == 1 and "DR or BDR" or "DR")
+end
+
+--- True if we are the peer a retry>=2 requester re-elected: the first addon user
+--- after our DR, our BDR and the requester itself.
+function Comms:IsOpenRoundStandIn(requester)
+    local first
+    for key in pairs(self.addonUsers) do
+        if key ~= self.currentDR and key ~= self.currentBDR and key ~= requester
+                and (not first or key < first) then
+            first = key
+        end
+    end
+    return first ~= nil and first == GuildCrafts.Data:GetPlayerKey()
 end
 
 function Comms:QueueSyncRequest(requester, payload, retryCount)
