@@ -6,8 +6,11 @@ enable-nolib-creation: no
 move-folders:
   GuildCrafts/GuildCrafts: GuildCrafts
 
+# release.yml writes this version's CHANGELOG.md section here first
+# (.github/scripts/release-notes.sh). It's untracked, and the packager never copies
+# dotfiles into the zip. Without it, a local run falls back to a commit-log changelog.
 manual-changelog:
-  filename: CHANGELOG.md
+  filename: .release-notes.md
   markup-type: markdown
 
 # Only the Forever flavor ships from this fork. The release workflow deletes the
