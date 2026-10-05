@@ -177,11 +177,11 @@ packager on its own would skip CurseForge without an error and still create the 
    ```bash
    git fetch origin && git worktree add --detach ../GuildCrafts-release-review origin/main
    ```
-4. From that worktree, run an adversarial Codex review against the previous `v*` tag. For the
-   first tag, use `e78c4c9`, the upstream fork point. Run it outside the sandbox, because
-   Codex writes to `~/.codex`.
+4. From that worktree, run a Codex review against the previous `v*` tag. For the first tag,
+   use `e78c4c9`, the upstream fork point. Run it outside the sandbox, because Codex writes to
+   `~/.codex`.
    ```bash
-   node ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs adversarial-review --wait --base <base> "How the changes in this range interact: sync, election, prune, GUID identity. Review GuildCrafts/ only; ignore Libs/, docs and specs."
+   tools/codex-review.sh --base <base> --task "Release range since <base>: every change merged to main for the next tag. Weigh how the changes interact: sync, election, prune, GUID identity. Review GuildCrafts/ only; ignore Libs/, docs and specs."
    ```
 5. Fix or rebut every finding as `CLAUDE.md` "Codex review findings" says, and record the
    outcome in `spec/migration-forever.md`. A fix changes `main`, so start again from step 2.

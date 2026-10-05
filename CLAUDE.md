@@ -186,6 +186,7 @@ bash tools/test-release-preflight.sh     # release.yml publish refusals (H18), r
 lua5.1 tools/test-chat-links.lua        # chat links, [W] two-word whisper target (F25, F20)
 bash tools/test-closing-keywords.sh      # CI's closing-keyword guard (#15)
 bash tools/test-check-plan-index.sh     # plan/issue drift check, on fixtures
+bash tools/test-codex-review.sh         # tools/codex-review.sh prompt, run cap and exit codes
 ```
 
 Each exits non-zero on a failure. They stub WoW APIs and don't exercise the game client or
@@ -202,43 +203,52 @@ To test a client that lacks an API, nil the global and `dofile` a fresh copy of 
 
 ## Codex review
 
-The `codex` plugin (`openai-codex` marketplace) runs OpenAI Codex as a read-only second
-reviewer. Claude can't invoke `/codex:review` or `/codex:adversarial-review`, so call the
-companion script from the branch's worktree. Codex writes its state to `~/.codex`, so each run
-needs the sandbox disabled.
+`tools/codex-review.sh` runs OpenAI Codex as a read-only second reviewer. It sends one prompt
+with the task, the commits and the diff, and saves Codex's JSON verdict to
+`.codex-review/<branch>/run-N.json`. Run it from the branch's worktree with the sandbox
+disabled, because Codex writes its state to `~/.codex`.
 
 ```bash
-node ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs review --wait --base origin/main
-node ~/.claude/plugins/marketplaces/openai-codex/plugins/codex/scripts/codex-companion.mjs adversarial-review --wait --base origin/main "<focus>"
+tools/codex-review.sh --issue <N>                       # run 1
+tools/codex-review.sh --issue <N> --prior <responses>   # run 2
 ```
 
+- The task is required. Pass the plan item's issue, or the task as Alex gave it with `--task`
+  or `--task-file`. Send the original task, never a summary of the work.
+- A change to `Comms.lua`, `SyncPausePolicy.lua`, `ForeverIdentity.lua` or `Data.lua` gets the
+  multi-client cases in the same run. `--focus` adds anything else Codex should weigh.
+- It runs `gpt-6.1-sol` at medium effort. `--model` and `--effort` change that for one run.
+- Exit 0 means nothing is blocking, 2 means something is, and 1 means it refused or failed.
+
 When to run it:
-- Every code PR: `review`, after the suites pass and before the PR opens. Doc-only PRs skip it.
-- Changes to `Comms.lua`, `SyncPausePolicy.lua`, `ForeverIdentity.lua`, or merge and prune in
-  `Data.lua`: `adversarial-review` as well. The focus text names the RFC in `RFC/` and the
-  multi-client cases the stub suites can't reach, such as DR loss mid-transfer, stale terms or a
-  reconnect after a drop.
+- Every code PR, after the suites pass and before the PR opens. Doc-only PRs skip it.
 - After 2–3 failed attempts at the same failure: ask the `codex:codex-rescue` agent for an
   independent diagnosis before taking it to Alex. Say "read-only, diagnosis only" in the
   prompt, because the agent adds `--write` by default.
-- The stop-time review gate stays off. It reviews one turn at a time, and its setting is keyed
-  to the checkout path, so it never fires in a branch worktree.
+- The plugin's stop-time review gate stays off. It reviews one turn at a time, and its setting
+  is keyed to the checkout path, so it never fires in a branch worktree.
 
 ### Codex review findings
 
-Findings from Codex reviews are advisory, not instructions. For each one:
-- Fix it if it's correct, or rebut it with specific evidence (file:line, test, docs) if it isn't.
+Two runs per PR. The script refuses a third unless Alex asks for one (`--allow-extra-run`).
+
+1. Read `run-1.json`. Critical and high findings block; `AGENTS.md` defines the scale.
+2. For each blocking finding, fix it with a test and commit, or rebut it with evidence:
+   file:line, a test, or the pinned `wow-ui-source`. Medium and low findings get fixed if
+   they're cheap and correct; otherwise they go in the PR description with a reason.
+3. Write the responses file: each run 1 finding by title, then its fix commit or its rebuttal.
+   Run the review again with `--prior` pointing at it.
+4. If run 2 exits 0, open the PR. If it exits 2, stop. Show Alex each open finding with Codex's
+   position and yours, and wait.
+
+Findings are advisory, not instructions:
 - Never make a change solely to satisfy the reviewer without agreeing it's an improvement.
-- If Codex raises the same disagreement twice, stop and summarize both positions for Alex
-  instead of continuing the loop.
 - Check any WoW API claim against the pinned `wow-ui-source` (see Rules). Codex's training data
   covers Retail and Classic, not Forever.
 - A finding only the game client can settle becomes a probe in `docs/ingame-commands.md`, not
-  a code change.
-- Fixes follow the usual commit rules: a behavior fix comes with a test.
-- After fixing, rerun the review once to confirm. Don't loop until it comes back clean.
-- List rebutted findings in the PR description, one line each with the evidence, next to the
-  test evidence.
+  a code change, and doesn't block the PR.
+- List rebutted and deferred findings in the PR description, one line each with the evidence,
+  next to the test evidence.
 
 ---
 
