@@ -16,7 +16,8 @@ genuine. So a desktop companion (N5) reads the file the game already wrote (N3) 
 to a backend (N6), and Discord is the trust anchor for who may see it.
 
 N9 is closed as a no for now: Battle.net has no Forever API namespace, and the Classic profile
-APIs have no professions endpoint (research file, Part B).
+APIs have no professions endpoint (research file, section "N9: Battle.net API for Forever — No
+(2026-10-03)").
 
 ## Decisions
 
@@ -84,7 +85,7 @@ Every table except `tenants` has `tenant_id` and an index leading with it.
 | 4 Write-only tenant tokens | AD11; the upload endpoint is the only thing a token can call; it replaces its own tenant's snapshot only | N6 tests: token on any read endpoint → 401; token for tenant A on tenant B → 404 |
 | 5 Hard isolation | AD4; access layer takes a `TenantContext` built only from a session or token; raw `env.DB` is forbidden outside it (lint rule); 404 for other tenants | N6 matrix test: every endpoint × {own, other, none, revoked} |
 | 6 Uploads are untrusted | Schema validation with caps (2 MB body, 1,000 members, 5,000 recipes, 64-char names, depth 6), sanitised re-serialisation, per-token rate limit; HTML via text nodes only, strict CSP; Discord `allowed_mentions: {parse: []}` and markdown escaping | N6 fuzz and hostile-name tests; N7 and N8 escaping tests |
-| 7 Consent | Officer-level: tenant creation and token issue need a Discord admin; uploader: `/gc companion on`; member: `/gc optout`; `docs/user-guide.md` and a privacy page say what leaves the game | Review |
+| 7 Consent | Officer-level: the operator creates the launch tenant (AD3), self-serve tenant creation by a Discord admin comes later, and token issue needs a Discord admin; uploader: `/gc companion on`; member: `/gc optout`; `docs/user-guide.md` and a privacy page say what leaves the game | Review |
 | 8 Minimisation and retention | Schema carries names, GUIDs, professions, skill, specialisation, recipes, timestamps only. AD10; sessions purged at expiry; feed events 7 days after posting; audit log 90 days; tenant deletion purges R2 prefix and every D1 row | N6 deletion test queries every table |
 | 9 Blizzard's addon rules | The addon stays free and readable and sends nothing out; the companion only reads written files and never touches the game process | Review |
 | 10 State the trust limit | The admin page and privacy page say a token holder can upload made-up data for their own tenant only | Review |
@@ -152,4 +153,5 @@ and open source, and never touching the game process.
 
 - [ ] ADR merged, in this repo or the new one, with every privacy rule mapped to a mechanism.
 - [ ] Threat model lists each threat, its mitigation and its accepted residual risk.
-- [ ] Decision on whether N5–N8 move to the new repo's tracker. (AD1 proposes yes.)
+- [ ] Decision on whether N5–N8 move to the new repo's tracker. Alex decided the repository and
+      its name (AD1). Moving N5–N8 to its tracker is still a proposal.

@@ -22,7 +22,7 @@ N2 opt-out ──┬─► N1 export ──► N3 companion block ──► N5 c
 
 | ID | Spec | Repo | Feasible? | Blocked on |
 |---|---|---|---|---|
-| N1 | [N1-export.md](N1-export.md) | addon | Yes. Size measured; EB probe pending | EB and DT probes |
+| N1 | [N1-export.md](N1-export.md) | addon | Yes. Size measured; EB probe pending | EB and TIME probes |
 | N2 | [N2-optout.md](N2-optout.md) | addon | Yes, with an accepted residual for version-3 clients | — |
 | N3 | [N3-companion-export.md](N3-companion-export.md) | addon | Yes. `C_Club.GetGuildClubId` documented at the pin | N1, N2, H3 [#6]; CLUB probe |
 | N4 | [N4-adr-external-services.md](N4-adr-external-services.md) | addon (ADR) | Proposed | Alex's review |
@@ -32,7 +32,8 @@ N2 opt-out ──┬─► N1 export ──► N3 companion block ──► N5 c
 | N8 | [N8-discord-bot.md](N8-discord-bot.md) | new | Yes. Error 1015 risk on feed posts only | N6 |
 
 N9 ([#59]) was answered during this work. Battle.net has no Forever API namespace, and the Classic
-profile APIs have no professions endpoint (`research/2026-10-03-companion-n9.md`, Part B).
+profile APIs have no professions endpoint (`research/2026-10-03-companion-n9.md`, section "N9:
+Battle.net API for Forever — No (2026-10-03)").
 #59 was closed as not planned on 2026-10-04.
 
 ## Decisions made 2026-10-04 (Alex)
@@ -62,14 +63,14 @@ profile APIs have no professions endpoint (`research/2026-10-03-companion-n9.md`
 
 ## In-game probes to run (beta, any character in a guild)
 
-The commands are in the N1 and N3 specs; all three are parse-checked and 255 characters or
-fewer. Add them to `docs/ingame-commands.md` and the gist when the work starts. Record the
-results in `spec/migration-forever.md`.
+EB and CLUB are in the N1 and N3 specs, parse-checked and 255 characters or fewer. Add them
+to `docs/ingame-commands.md` and the gist when the work starts. TIME is already there. Record
+the results in `spec/migration-forever.md`.
 
 | Tag | What it answers | Spec |
 |---|---|---|
 | EB | How long a 1 MB `SetText` takes in a multi-line EditBox, and whether it stores it all | N1 |
-| DT | Whether `date` takes the `!` UTC prefix; client vs server clock skew | N1 |
+| TIME | Whether `date` takes the `!` UTC prefix; client vs server clock skew. The existing H2 probe, which replaces N1's DT draft | N1 |
 | CLUB | Whether `C_Club.GetGuildClubId` returns an ID on Forever | N3 |
 
 ## Research
