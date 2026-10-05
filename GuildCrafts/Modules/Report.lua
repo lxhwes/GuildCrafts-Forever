@@ -194,6 +194,9 @@ local function AddSync(out)
         or tostring(result) .. " (" .. EnumName(Enum and Enum.RegisterAddonMessagePrefixResult, result) .. ")")
     out[#out + 1] = "Last message received: " .. Age(Comms.lastMessageAt)
     out[#out + 1] = "Unresolved-sender drops: " .. tostring(Comms.unresolvedSenderDrops)
+    out[#out + 1] = string.format("Sender fallbacks: accepted %s, refused %s, revoked %s",
+        tostring(Comms.senderFallbacks), tostring(Comms.senderFallbackRefusals),
+        tostring(Comms.senderFallbackRevocations))
     out[#out + 1] = "Send failures: " .. tostring(Comms.sendFailures)
 end
 
