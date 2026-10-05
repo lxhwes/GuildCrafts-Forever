@@ -98,7 +98,7 @@ Blocker found in game on 2026-10-05, before the tag:
 
 | ID | Issue | Item | Tags |
 |---|---|---|---|
-| H21 | [#98] | Scan files recipes under the wrong profession after a window switch | `blocker`, `hardening` |
+| H21 | [#98] | ~~Scan files recipes under the wrong profession after a window switch~~ | Done: PR #101, checked in game and issue closed 2026-10-05 |
 
 **Phase 2 exit gate:** the two-client checklist passes end to end, including a drop on one
 client while the other is offline, then reconnect.
