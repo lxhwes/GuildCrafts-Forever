@@ -433,8 +433,12 @@ On GitHub on 2026-10-05, H20's release notes (#80): `workflow_dispatch` from bra
   is in it.
 - The zip has no `.release-notes.md`. It still holds `GuildCrafts/CHANGELOG.md`, 43,907 bytes,
   with the full history. The client doesn't load it, so it stays.
-- The zip also holds `GuildCrafts/AGENTS.md`, added in #75 after run `37093088953` and not in
-  `.pkgmeta` `ignore`. Not changed here.
+- The zip also held `GuildCrafts/AGENTS.md`, added in #75 after run `37093088953` and not in
+  `.pkgmeta` `ignore`. Fixed in the same PR by an `ignore:` entry (`182e782`).
+
+The same dry run on `182e782` (run `37259107845`) passed: the same gate line with
+`GuildCrafts-182e782-forever.zip`, and publish skipped. The zip has no `AGENTS.md`. The
+`release-notes` artifact is byte-identical to the first run's, 27 lines under `## Unreleased`.
 
 ### Release procedure
 
