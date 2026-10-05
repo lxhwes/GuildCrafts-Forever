@@ -219,7 +219,7 @@ G: in game.
 | Q4 | Why the first `/gc dump` on 2026-10-02 stored nothing | [#26] | H5, H6 |
 | Q5 | Sender name and whisper reach for a guildmate on another server prefix | [#27] | Phase 2 two-client run |
 | Q6 | Does ChatThrottleLib v32 clear the chat taint in game? | [#28] | Wave 1 |
-| Q7 | Date and channel of dkruenbo's two messages, for `docs/ORIGIN.md` | [#29] | Alex |
+| Q7 | Date and channel of [@dkruenbo](https://github.com/dkruenbo)'s two messages, for `docs/ORIGIN.md` | [#29] | Alex |
 | Q8 | Do GUILD addon messages reach a client inside an instance? `Comms.lua` assumes not; three upstream reports suggest they do | [#45] | The R4 probe in `spec/curseforge-audit.md`, Phase 2 two-client run |
 
 Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
@@ -230,7 +230,7 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed.
 
 | Date | Decision |
 |---|---|
-| 2026-10-02 | Publish the Forever flavor only, under dkruenbo's CurseForge project 1469206. Keep the other five TOCs and `Data/` untouched in the repo |
+| 2026-10-02 | Publish the Forever flavor only, under [@dkruenbo](https://github.com/dkruenbo)'s CurseForge project 1469206. Keep the other five TOCs and `Data/` untouched in the repo |
 | 2026-10-02 | Forever loads through `GuildCrafts_Camelot.toc`; `_Forever` isn't read by the client |
 | 2026-10-02 | Forever members are keyed by GUID (`Modules/ForeverIdentity.lua`, Camelot TOC only) |
 | 2026-10-02 | Only `/gc drop` removes a profession that holds recipes |

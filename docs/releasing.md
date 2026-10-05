@@ -208,7 +208,7 @@ Z=$(ls GuildCrafts-*-forever.zip)
    ```bash
    unzip -p "$Z" GuildCrafts/GuildCrafts_Camelot.toc | head -9
    ```
-4. Check the README opens with dkruenbo's credit.
+4. Check the README opens with [@dkruenbo](https://github.com/dkruenbo)'s credit.
    ```bash
    unzip -p "$Z" GuildCrafts/README.md | head -4
    ```

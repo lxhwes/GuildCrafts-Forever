@@ -370,7 +370,7 @@ On GitHub on 2026-10-03, `workflow_dispatch` with `publish=false` (run `37093088
   `forever-gate: OK (Game version: 1.60.1; GuildCrafts-8f0dc69-forever.zip; CTL v32)`.
 - The downloaded artifact held one TOC outside `Libs/`, `GuildCrafts/GuildCrafts_Camelot.toc`
   (Interface 16001, `## Version: 8f0dc69`, project 1469206), and no `Data/`, docs, `CLAUDE.md`
-  or dotfiles. `README.md` opens with dkruenbo's credit, and `LICENSE` has both copyright lines.
+  or dotfiles. `README.md` opens with [@dkruenbo](https://github.com/dkruenbo)'s credit, and `LICENSE` has both copyright lines.
 - The packager writes CRLF line endings. With `\r` stripped, the zipped ChatThrottleLib hashes
   to the vetted v32 `3491b6c9…6dde8`.
 - No real CurseForge upload has been made yet.
