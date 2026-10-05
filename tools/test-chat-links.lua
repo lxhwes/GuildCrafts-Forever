@@ -1,4 +1,4 @@
--- Chat link and whisper regressions (UI/MainFrame.lua, F25) with stubbed WoW APIs.
+-- Chat link, whisper and search-copy regressions (UI/MainFrame.lua, F25, H17) with stubbed WoW APIs.
 -- Run from the repository root: lua5.1 tools/test-chat-links.lua
 -- Forever defines ChatFrameUtil.InsertLink/OpenChat; ChatEdit_InsertLink and ChatFrame_OpenChat
 -- are only aliases in Blizzard_DeprecatedChatInfo (Deprecated_ChatFrame.lua:43, :74 at 9a789c0).
@@ -130,6 +130,29 @@ end)
 test("[W] with no chat API says so instead of erroring", function()
     UI:OpenWhisper("Geo", "Elixir")
     assert(#printed == 1, "printed " .. #printed .. " message(s)")
+end)
+
+-- H17 (#20): the search only covers guildmates who run GuildCrafts and have scanned.
+test("empty search says it only covers GuildCrafts users", function()
+    local text
+    local font = {}
+    function font:SetText(t) text = t end
+    setmetatable(font, { __index = function() return function() end end })
+    local ui = setmetatable({
+        searchBox = { GetText = function() return "Elixir" end },
+        detailWelcome = { Hide = function() end },
+        detailContent = {
+            CreateFontString = function() return font end,
+            SetHeight = function() end,
+        },
+        detailRows = {},
+        HideProfessionToggle = function() end,
+        ClearDetailRows = function() end,
+    }, { __index = UI })
+    ui:ShowSearchResults({})
+    assert(text and text:find("Elixir", 1, true), "query missing: " .. tostring(text))
+    assert(not text:find("Nobody in the guild", 1, true), "still claims nobody knows it")
+    assert(text:find("GuildCrafts", 1, true), "doesn't say it only covers GuildCrafts users")
 end)
 
 local failed = 0

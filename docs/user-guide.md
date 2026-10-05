@@ -97,9 +97,8 @@ return to the profession list.
 Recipe results show the profession, crafters, `[W]`, `[G]` and a favorite star, as in the
 Recipes view.
 
-"Nobody in the guild knows '...'" only means no GuildCrafts user who has scanned knows the
-recipe. Guildmates without the addon, or who haven't opened that profession window, aren't
-in the database.
+A search with no hits says no GuildCrafts user has the recipe recorded. Guildmates without the
+addon, or who haven't opened that profession window, aren't in the database.
 
 The buttons along the bottom of the window are toggles:
 

@@ -1242,7 +1242,9 @@ function UI:ShowSearchResults(results)
         noResult:SetWidth(360)
         noResult:SetJustifyH("CENTER")
         if query ~= "" then
-            noResult:SetText("Nobody in the guild knows '" .. query .. "'.")
+            -- The database only holds guildmates who run GuildCrafts and have scanned.
+            noResult:SetText("No GuildCrafts user has '" .. query .. "' recorded. Only guildmates "
+                .. "who run GuildCrafts and have opened their profession windows are listed.")
         else
             noResult:SetText("No results found.")
         end
