@@ -122,6 +122,32 @@ function Data:GetMemberName(key)
     return name or key
 end
 
+-- True when two spellings can name the same character: any of their candidates match.
+local function SameName(a, b)
+    local ca, cb = NameCandidates(a), NameCandidates(b)
+    for i = 1, 3 do
+        for j = 1, 3 do
+            if ca[i] and ca[i] == cb[j] then return true end
+        end
+    end
+    return false
+end
+
+--- Whether a sender name that didn't resolve may be keyed by the GUID its payload
+--- claims. Returns the GUID, or nil and why it was refused. Addon-message sender
+--- names come from the server, so the check is that name and GUID agree as far as
+--- the roster knows. A GUID the roster hasn't seen is accepted unverified.
+function Data:CheckSenderClaim(name, guid)
+    if type(name) ~= "string" or name == "" or IsSecret(name) then return nil, "no sender name" end
+    if not IsPlayerGUID(guid) then return nil, "not a player GUID" end
+    -- Our own echo resolves by name, so another name claiming our GUID is never us.
+    if guid == self:GetPlayerKey() then return nil, "claims our own GUID" end
+    if not guidToName[guid] then RescanRoster() end
+    local known = guidToName[guid]
+    if known and not SameName(name, known) then return nil, "roster names it " .. known end
+    return guid
+end
+
 function Data:GetWhisperTarget(key)
     local name = self:GetMemberName(key)
     if name == key and IsPlayerGUID(key) then return nil end
