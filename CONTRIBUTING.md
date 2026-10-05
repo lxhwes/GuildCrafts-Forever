@@ -1,6 +1,6 @@
 # Contributing to GuildCrafts for WoW Forever
 
-Thanks for helping. This fork adapts dkruenbo's GuildCrafts for WoW Forever, and contributions
+Thanks for helping. This fork adapts [@dkruenbo](https://github.com/dkruenbo)'s GuildCrafts for WoW Forever, and contributions
 are welcome. Planned work and open findings are tracked in the
 [issues](https://github.com/lxhwes/GuildCrafts-Forever/issues), and
 [spec/forever-plan.md](spec/forever-plan.md) has the phases they belong to. Check there before

@@ -8,8 +8,10 @@ upstream author's permission (`docs/ORIGIN.md`). CurseForge project 1469206 is s
 upstream, so a file tagged for a Classic flavor would land next to upstream's own files.
 Never upload a zip made by hand, because `GuildCrafts/` holds all six TOCs.
 
-The last verified run is the 2026-10-03 dry run, run `37093088953`, which packaged `main` at
-`8f0dc69`. No real CurseForge upload has been made yet. Dated packaging experiments are in
+The newest dry run is PR #77's, run `37218988581` on 2026-10-04, which passed. It packaged
+the branch commit `8f9b3cc`, not a commit to be tagged. The last dry run of `main`, with its
+artifact inspected, is run `37093088953` on 2026-10-03, which packaged `8f0dc69`. No real
+CurseForge upload has been made yet. Dated packaging experiments are in
 `spec/migration-forever.md` under "Packaging".
 
 ---
@@ -208,7 +210,7 @@ Z=$(ls GuildCrafts-*-forever.zip)
    ```bash
    unzip -p "$Z" GuildCrafts/GuildCrafts_Camelot.toc | head -9
    ```
-4. Check the README opens with dkruenbo's credit.
+4. Check the README opens with [@dkruenbo](https://github.com/dkruenbo)'s credit.
    ```bash
    unzip -p "$Z" GuildCrafts/README.md | head -4
    ```
@@ -286,6 +288,7 @@ run may already have uploaded a file, and a retry would upload a second one.
 
 ## Open items
 
-- Changelog upload, Phase 2. `.pkgmeta` `manual-changelog` sends the whole `CHANGELOG.md`
-  as each file's changelog. Most of it is upstream's Classic history. Not solved yet; see
-  Phase 2 in `spec/forever-plan.md`.
+- Changelog upload. `.pkgmeta` `manual-changelog` sends the whole `CHANGELOG.md` as each
+  file's changelog. Most of it is upstream's Classic history. Not solved yet; tracked as H20,
+  [#80](https://github.com/lxhwes/GuildCrafts-Forever/issues/80), in Phase 1, to land before
+  the first publish.

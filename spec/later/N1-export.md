@@ -9,7 +9,8 @@ freeze has passed and the launch build is out.
 1. Read `CLAUDE.md`, this file, and the privacy rules in `spec/later-backlog.md`.
 2. Read `GuildCrafts/Modules/Report.lua` (the copy box this reuses) and `tools/test-report.lua`
    (the test pattern).
-3. Run the EB and DT probes below if their results aren't in `spec/migration-forever.md` yet.
+3. Run the EB probe below, and the TIME probe in `docs/ingame-commands.md`, if their results
+   aren't in `spec/migration-forever.md` yet.
 4. Work TDD: `test(export):` commit first, then `feat(export):`.
 
 ## Decisions
@@ -136,7 +137,7 @@ per member-profession-recipe, ordered like the JSON.
   names ("Geo Prizm") need no quoting.
 - `Member`: the display name, or `(unresolved)` when it isn't known. No GUIDs in CSV.
 - `LastScanned`: `YYYY-MM-DD` of the profession's `lastUpdate`, UTC via `date("!%Y-%m-%d")` if
-  the DT probe shows `!` works, else local `date("%Y-%m-%d")`.
+  the TIME probe shows `!` works, else local `date("%Y-%m-%d")`.
 - Line ending `\n`.
 
 ### Performance
@@ -176,8 +177,8 @@ Add the suite to `.github/workflows/ci.yml` and to the list in `CLAUDE.md` "Veri
 
 ## In-game checks
 
-Add these to `docs/ingame-commands.md`; all three parse-check with `luac -p` and are 255
-characters or fewer.
+Add EB to `docs/ingame-commands.md`; it parse-checks with `luac -p` and is 255 characters or
+fewer.
 
 EB, anywhere. Prints input length, stored length and milliseconds for a 1 MB `SetText`:
 ```
@@ -186,10 +187,10 @@ EB, anywhere. Prints input length, stored length and milliseconds for a 1 MB `Se
 Then, with N1 built: `/gc export json` in the real guild, Ctrl-A, Ctrl-C, paste into a text
 editor, and confirm the byte count matches and the JSON validates.
 
-DT, anywhere. Whether `date` takes the `!` UTC prefix, and the client/server clock skew:
-```
-/run local ok,v=pcall(date,"!%Y-%m-%dT%H:%M:%SZ",GetServerTime());print("DT",ok,v,GetServerTime and GetServerTime()-time());
-```
+Whether `date` takes the `!` UTC prefix, and the client/server clock skew, are answered by the
+TIME probe already in `docs/ingame-commands.md` (H2). Its last field is server time formatted
+with `date("!...")`, and its third is server minus client in seconds. One TIME run answers both
+H2 and N1, so N1 adds no probe of its own.
 
 ## Done when (from the issue)
 
@@ -200,7 +201,7 @@ DT, anywhere. Whether `date` takes the `!` UTC prefix, and the client/server clo
       to CI.
 - [ ] luacheck 0 warnings; user guide updated.
 
-Also: CHANGELOG entry under `## Unreleased` → `### New features`; EB and DT results recorded in
+Also: CHANGELOG entry under `## Unreleased` → `### New features`; EB and TIME results recorded in
 `spec/migration-forever.md`.
 
 [#5]: https://github.com/lxhwes/GuildCrafts-Forever/issues/5

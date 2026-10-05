@@ -1,4 +1,4 @@
-> **Historical (upstream).** Written for the Classic addon by dkruenbo, before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](../spec/forever-plan.md). Current architecture reference is planned (D1 cut 2); read this with [`spec/migration-forever.md`](../spec/migration-forever.md).
+> **Historical (upstream).** Written for the Classic addon by [@dkruenbo](https://github.com/dkruenbo), before this fork. It is kept for reference and doesn't describe WoW Forever behaviour. Current docs: [user guide](../docs/user-guide.md), [testing](../docs/testing.md), [releasing](../docs/releasing.md), [plan](../spec/forever-plan.md). Current architecture reference is planned (D1 cut 2); read this with [`spec/migration-forever.md`](../spec/migration-forever.md).
 
 # GuildCrafts Protocol — RFC 0001
 

@@ -183,7 +183,8 @@ is back.
   opt out one by one), and how hiding differs.
 - CHANGELOG `### New features`, and a note that the protocol version is now 4.
 - `CLAUDE.md`: "Both are currently 3" becomes `VERSION` 4, `DATA_FORMAT_VERSION` 3.
-- `spec/forever-plan.md`: [#34] renamed to protocol v5.
+- `spec/forever-plan.md`: nothing left. [#34] was retitled to protocol v5 on 2026-10-04, and the
+  plan was updated to match then.
 
 ## Done when (from the issue)
 

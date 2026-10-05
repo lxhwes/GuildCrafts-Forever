@@ -1,3 +1,5 @@
+> **Superseded in part (2026-10-04).** For N1–N8, the implementation specs and decisions in [`spec/later/`](later/README.md) win where they differ from this file. This file still holds the privacy rules, the G items and the suggested order.
+
 # GuildCrafts Forever — "Later" backlog
 
 Written 2026-10-03 against `main` at `3c646a5`. These are feature ideas parked until after
@@ -71,7 +73,8 @@ and an architecture decision record before anything is built.
    to. It never uploads the raw file, other partitions, the WTF account folder name or any file
    paths.
 2. **Tenant = a guild's Discord server.** Discord is the trust anchor, because the game can't
-   be one. A tenant is created by a Discord server admin and bound to that server's ID. There's
+   be one. A tenant is bound to one Discord server's ID. At launch the operator creates the one
+   tenant; self-serve creation by a Discord server admin comes later (N4 ADR, AD3). There's
    no public directory, no tenant search and no guessable URLs, and pages are `noindex`.
 3. **Viewers sign in with Discord OAuth.** Access requires membership of the bound Discord
    server, optionally with a configured role. Check it at login and again periodically, and
@@ -106,11 +109,11 @@ and an architecture decision record before anything is built.
 
 - **Why:** The cheapest way to get data out of the game, and the format everything else reads.
   Upstream candidate #7 (`ROADMAP.md`, "Export to CSV / Text").
-- **How:** A read-only `MultiLineEditBox` in an AceGUI frame, selected all on open. Two formats:
-  CSV (`Member, Profession, Skill, Specialisation, Recipe, RecipeKey, Category, LastScanned`)
-  and JSON with a top-level `schema` version. Current guild partition only. Names resolved
-  from the live roster at export time; GUIDs in JSON only. Members who opted out (N2) are
-  left out. Build strings with `table.concat`, and yield in a coroutine if a large-guild
+- **How:** Reuses `/gc report`'s plain `EditBox` copy frame (not AceGUI), selected all on open.
+  Two formats: CSV (`Member, Profession, Skill, Specialisation, Recipe, RecipeKey, Category,
+  LastScanned`) and JSON with a top-level `schema` version. Current guild partition only. Names
+  resolved from the live roster at export time; GUIDs in JSON only. Members who opted out (N2)
+  are left out. Build strings with `table.concat`, and yield in a coroutine if a large-guild
   fixture drops frames.
 - **Depends on:** N2 for the opt-out filter (N1 can ship first and add the filter when N2
   lands).
@@ -131,10 +134,10 @@ and an architecture decision record before anything is built.
   stored 1/0. (b) **Stop publishing me:** a lasting opt-out marker on the member entry that
   merge, F1's carry-over (`Data.lua`) and prune all respect, so peers don't restore or revive
   the entry. Touches the protocol: read `RFC/rfc-0002-sync-protocol.md` and
-  `RFC/rfc-0003-data-model.md` first. Decide whether this joins protocol v4 ([#34]). Each
-  character opts out separately, because Forever doesn't expose which characters share an
-  account.
-- **Depends on:** [#34] if bundled with v4.
+  `RFC/rfc-0003-data-model.md` first. Decided 2026-10-04: N2 takes protocol `VERSION` 4 on its
+  own, and [#34] becomes protocol v5. Each character opts out separately, because Forever
+  doesn't expose which characters share an account.
+- **Depends on:** nothing ([#34] moved to protocol v5).
 - **Done when:**
   - [ ] `/gc optout` and `/gc optin` (names to confirm), with a confirmation line in chat.
   - [ ] An opted-out member disappears from every peer's view, tooltip and `!gc` reply after
@@ -148,11 +151,12 @@ and an architecture decision record before anything is built.
 - **Why:** Gives the companion (N5) a stable, versioned contract, so it never parses internal
   tables, and enforces segregation at the source.
 - **How:** `/gc companion on` enables the current guild's partition (stored 1/0). On
-  `PLAYER_LOGOUT`, the addon writes `GuildCraftsDB._export[<guildKey>]`, using N1's JSON schema
-  as a Lua table: `schema`, `generatedAt` (server time, per H2 [#5]), member names and GUIDs,
-  professions, recipes. It writes nothing for partitions that aren't enabled, and clears the
-  block on `/gc companion off`. Include `C_Club.GetGuildClubId()` if it exists on Forever, as a
-  hint only. Measure the SavedVariables size growth on a 100-member fixture.
+  `PLAYER_LOGOUT`, the addon writes `GuildCraftsExport.guilds[<guildKey>]` (a separate
+  SavedVariable), using N1's JSON schema as a Lua table: `schema`, `generatedAt` (server time,
+  per H2 [#5]), member names and GUIDs, professions, recipes. It writes nothing for partitions
+  that aren't enabled, and clears the block on `/gc companion off`. Include
+  `C_Club.GetGuildClubId()` if it exists on Forever, as a hint only. Measure the SavedVariables
+  size growth on a 100-member fixture.
 - **Depends on:** N1 (schema), N2 (opt-out), H3 [#6] (persisted names).
 - **Done when:**
   - [ ] The block exists only for enabled partitions; disabling removes it at next logout.
@@ -187,9 +191,10 @@ and an architecture decision record before anything is built.
 
 - **Why:** Gets the guild's recipe book to the web without anyone copying and pasting.
 - **How:** Watches the SavedVariables file for changes (it's written on logout or reload),
-  parses only `_export[<bound guildKey>]` with a safe Lua-table parser (never `load`/`eval`),
-  and uploads with the tenant token. A first-run wizard binds one guild and pastes the token.
-  A `--dry-run` shows exactly what would be sent. The token is kept in the OS keychain.
+  parses only `GuildCraftsExport.guilds[<bound guildKey>]` with a safe Lua-table parser (never
+  `load`/`eval`), and uploads with the tenant token. A first-run wizard binds one guild and
+  pastes the token. A `--dry-run` shows exactly what would be sent. The token is kept in the OS
+  keychain.
 - **Depends on:** N3, N4, N6.
 - **Done when:**
   - [ ] Never reads or sends other partitions, the account folder name or paths (test with a
@@ -201,9 +206,10 @@ and an architecture decision record before anything is built.
 ### N6 [#56]: Web backend: tenancy, auth and isolation
 
 - **Why:** The privacy rules live or die here.
-- **How:** Implements rules 2–8: tenant creation by a Discord server admin, Discord OAuth,
-  membership and role checks, hashed upload tokens, the tenant-scoped access layer, schema
-  validation, rate limits, an audit log, retention purge and tenant deletion.
+- **How:** Implements rules 2–8: tenant creation (by the operator at launch, self-serve by a
+  Discord server admin later; ADR AD3), Discord OAuth, membership and role checks, hashed
+  upload tokens, the tenant-scoped access layer, schema validation, rate limits, an audit log,
+  retention purge and tenant deletion.
 - **Depends on:** N4.
 - **Done when:**
   - [ ] The test suite proves cross-tenant reads and writes fail, for every endpoint.
@@ -247,8 +253,9 @@ and an architecture decision record before anything is built.
 - **How:** Check the official API docs and namespaces, and try one Forever character and
   guild. Read only; no build.
 - **Done when:**
-  - [ ] A yes or no recorded in `spec/migration-forever.md`, with the evidence.
-  - [ ] If yes, a note in N4's ADR on using it for membership checks and coverage.
+  - [x] A yes or no recorded in `spec/migration-forever.md`, with the evidence. No, recorded
+    2026-10-03 under "Battle.net web API (N9, 2026-10-03)".
+  - [x] If yes, a note in N4's ADR on using it for membership checks and coverage. Not needed.
 - **Labels:** `research`, `external`
 
 ---
@@ -358,7 +365,9 @@ and an architecture decision record before anything is built.
 ## Suggested order, once launch is stable
 
 1. N2, then N1. Both are small, useful on their own, and everything external needs them.
-2. N9 (an hour of research) and N4 (the design), before writing any service code.
+2. ~~N9 (an hour of research)~~ done 2026-10-04: No, Battle.net's API doesn't cover Forever
+   (`later/research/2026-10-03-companion-n9.md`). Then N4 (the design), before writing any
+   service code.
 3. G3, G4 and G7: quick in-game wins.
 4. N3, N6, N5, N7, N8: the external stack, in dependency order.
 5. G1, G2, G5 and G6 as their dependencies land ([#31], [#30], [#18], [#5]).

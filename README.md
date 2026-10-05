@@ -1,7 +1,7 @@
 # GuildCrafts for WoW Forever
 
-GuildCrafts was written by [dkruenbo](https://github.com/dkruenbo/GuildCrafts) (`_Lektor`).
-@lxhwes maintains this WoW Forever flavor with the author's permission. The permission and
+GuildCrafts was written by [@dkruenbo](https://github.com/dkruenbo) (`_Lektor`).
+[@lxhwes](https://github.com/lxhwes) maintains this WoW Forever flavor with the author's permission. The permission and
 its terms are in
 [docs/ORIGIN.md](https://github.com/lxhwes/GuildCrafts-Forever/blob/main/docs/ORIGIN.md).
 Licensed under MIT, see [LICENSE](LICENSE).
