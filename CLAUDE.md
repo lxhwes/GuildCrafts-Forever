@@ -20,8 +20,10 @@ author's permission (`docs/ORIGIN.md`).
 - No file published from this fork may be tagged for another flavor.
 - Gethe/wow-ui-source branch `forever` at pin 9a789c0 (1.60.1.70170) is the API source of
   truth. It wins over docs and training data.
-  Vendored at `/Users/alex/code/legacynext/vendor/wow-ui-source` (sparse: no
-  `Blizzard_ChatFrame`, `Blizzard_Professions*` or guild roster docs; probe those in game).
+  It's a shared checkout at `$WOW_FOREVER_SRC` (default `~/code/wow-ui-source-forever`), read
+  by legacynext too, with `PINS.md` beside it. The sparse set includes `Blizzard_Professions*`,
+  `Blizzard_ChatFrame*`, `Blizzard_Communities` and `Blizzard_GuildControlUI`. Guild roster
+  behaviour still needs an in-game probe. See "Forever tooling" below.
 - Feature-detect APIs. Never branch on interface number. Never hardcode IDs.
 - SavedVariables booleans may not round-trip on Forever; store 1/0 until proven otherwise.
 - Addon messages are restricted during encounters. Extend `SyncPausePolicy.lua` rather than
@@ -42,6 +44,7 @@ author's permission (`docs/ORIGIN.md`).
 | `docs/releasing.md` | The release runbook |
 | `docs/testing.md` | Regression commands, solo and two-client procedures |
 | `docs/ingame-commands.md` | Copyable `/run` probes, mirrored to the gist |
+| `docs/beta-builds.md` | What each re-pin of the shared Forever checkout meant for GuildCrafts, newest first |
 | `docs/user-guide.md` | Player-facing usage and limitations |
 | `docs/ORIGIN.md` | Provenance and the author's permission, quoted verbatim |
 | `spec/fork-review.md` | The 2026-09-28 review that defines F1–F21 and C1–C6; historical, status lives in the issues |
@@ -216,6 +219,25 @@ Findings from Codex reviews are advisory, not instructions. For each one:
   test evidence.
 
 ---
+
+## Forever tooling
+
+The `forever-tools` plugin (enabled in `.claude/settings.json`) provides three skills shared with
+legacynext: `forever-api-lookup`, `ingame-script` and `beta-build-bump`. Their commands are on
+`PATH` in a session: `forever-env`, `forever-api-lookup <Symbol>`, `forever-verify-citations`,
+`forever-check-script docs/ingame-commands.md` and `forever-bump`.
+
+- This repo's settings for them are in `.claude/forever-tools/config.env`: the Camelot TOC, the
+  watchlist, the call-site buckets, and the luac the probe gate uses.
+- One checkout serves both addons, so a re-pin from legacynext moves it here too.
+  `.claude/forever-tools/pin` records the pin this repo last reconciled against. When the two
+  differ, the session start says `PIN_MOVED`, and `beta-build-bump` in reconcile mode catches
+  this repo up: citations, the watchlist, the Camelot TOC's Interface line, and
+  `docs/beta-builds.md`.
+- `ingame-script` follows the rules in the next section. Where they're stricter than the
+  skill (one command per block, a tag on every print, the gist), they win.
+- Never widen the shared sparse checkout to answer one question. Read outside it with
+  `GIT_NO_LAZY_FETCH=1 git -C ~/code/wow-ui-source-forever/wow-ui-source show HEAD:<path>`.
 
 ## In-game commands (gist workflow)
 

@@ -1,0 +1,72 @@
+# Symbols GuildCrafts depends on. One per line; blank lines and # comments ignored.
+#
+# forever-bump (the forever-tools beta-build-bump skill) greps each build's diff for these and
+# pulls out the hunks that mention them. A triage filter, not a contract: a symbol missing here
+# still shows up in full.diff.
+#
+# Every C_Namespace.Function under GuildCrafts/ (minus Libs/ and Data/) is watched
+# automatically, so the C_TradeSkillUI, C_ChatInfo, C_GuildInfo and C_AddOns calls need no line.
+# What is listed by hand: bare globals, events, Enum and template names. Add a line when the
+# addon starts depending on another one. First cut 2026-10-04, from a grep of the addon's calls.
+
+# --- Guild roster and identity ------------------------------------------------
+IsInGuild
+GuildRoster
+GetNumGuildMembers
+GetGuildRosterInfo
+GetGuildInfo
+UnitGUID
+UnitName
+UnitFullName
+GetRealmName
+GUILD_ROSTER_UPDATE
+
+# --- Professions and recipes --------------------------------------------------
+GetProfessions
+GetProfessionInfo
+GetNumSkillLines
+GetSkillLineInfo
+IsPlayerSpell
+GetSpellInfo
+GetSpellLink
+GetItemInfo
+GetClassicExpansionLevel
+TRADE_SKILL_SHOW
+TRADE_SKILL_LIST_UPDATE
+CRAFT_SHOW
+GET_ITEM_INFO_RECEIVED
+CraftingReagentType
+
+# --- Addon messages and chat --------------------------------------------------
+SendChatMessage
+RegisterAddonMessagePrefixResult
+AddOnRestrictionState
+AddOnRestrictionType
+ADDON_RESTRICTION_STATE_CHANGED
+CHAT_MSG_GUILD
+ChatFrameUtil
+ChatFrame_OpenChat
+ChatEdit_InsertLink
+SetTellTarget
+SendBNetTell
+
+# --- Combat, instances and lifecycle --------------------------------------------
+InCombatLockdown
+IsInInstance
+PLAYER_ENTERING_WORLD
+PLAYER_LOGIN
+PLAYER_REGEN_DISABLED
+PLAYER_REGEN_ENABLED
+ReloadUI
+GetBuildInfo
+issecretvalue
+
+# --- UI ---------------------------------------------------------------------
+BackdropTemplate
+UIPanelScrollFrameTemplate
+UIPanelCloseButton
+UISpecialFrames
+SetResizeBounds
+TooltipDataProcessor
+TooltipDataType
+IsShiftKeyDown
