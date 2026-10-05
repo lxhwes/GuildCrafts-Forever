@@ -1667,6 +1667,17 @@ local function GetRecipeCategoryName(info)
     end
 end
 
+-- H21: true when the client files recipeID under profName. Recipes may sit on a child skill
+-- line (2937-2948) whose parentProfessionName is the window's name (PSL, 2026-10-02), so
+-- either name may match. Names, because the F21 fallback has no window profession ID.
+local function RecipeBelongsTo(recipeID, profName)
+    local info = C_TradeSkillUI.GetProfessionInfoByRecipeID(recipeID)
+    if not info then return false end
+    local parent, own = NonEmpty(info.parentProfessionName), NonEmpty(info.professionName)
+    return (parent and Data:GetCanonicalProfName(parent) == profName)
+        or (own and Data:GetCanonicalProfName(own) == profName) or false
+end
+
 -- Consecutive scan retries before giving up. Each event-triggered scan starts a
 -- fresh budget, so a stuck read can't loop (or flood the debug log) forever.
 local SCAN_RETRY_LIMIT = 10
@@ -1785,46 +1796,63 @@ function Data:ScanTradeSkillModern(isRetry)
             return
         end
     end
-    self._scanRetries = 0
 
-    local newCount = 0
-    local learnedCount = 0
-    local newRecipes = {}
-
+    -- H21: after a quick window switch the list can still be the previous window's.
+    local learned, strays = {}, 0
+    local checkOwner = C_TradeSkillUI.GetProfessionInfoByRecipeID ~= nil
     for _, recipeID in ipairs(recipeIDs) do
         local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
         if info and info.learned then
-            learnedCount = learnedCount + 1
-            local schematic = GetRecipeSchematic(recipeID)
-            local key = GetRecipeOutputItemID(recipeID, schematic) or -recipeID
+            if checkOwner and not RecipeBelongsTo(recipeID, profName) then
+                strays = strays + 1
+            else
+                learned[#learned + 1] = { recipeID = recipeID, info = info }
+            end
+        end
+    end
+    if strays * 2 > strays + #learned then
+        self:RetryModernScan(1, string.format("recipe list isn't %s's yet (%d of %d learned belong elsewhere)",
+            profName, strays, strays + #learned))
+        return
+    end
+    self._scanRetries = 0
 
-            if key then
-                -- Scan reagents and category into shared RecipeDB. The category is stored on
-                -- its own so recipes whose reagents are already complete still get one.
-                local reagents = GetRecipeReagentList(recipeID, schematic)
-                local existingReagents = self:GetRecipeReagents(key)
-                local newReagents = #reagents > 0
-                    and (not existingReagents or #existingReagents < #reagents)
-                local category = GetRecipeCategoryName(info)
-                if newReagents or (category and category ~= self:GetRecipeCategory(key)) then
-                    self:SetRecipeInfo(key, info.name, category, newReagents and reagents or nil)
-                end
+    local newCount = 0
+    local learnedCount = #learned
+    local newRecipes = {}
 
-                if not recipes[key] then
-                    local recipeData = {
-                        name = info.name or "",
-                        source = "",
-                    }
-                    recipes[key] = recipeData
-                    newRecipes[key] = recipeData
-                    newCount = newCount + 1
-                end
+    for _, recipe in ipairs(learned) do
+        local recipeID, info = recipe.recipeID, recipe.info
+        local schematic = GetRecipeSchematic(recipeID)
+        local key = GetRecipeOutputItemID(recipeID, schematic) or -recipeID
+
+        if key then
+            -- Scan reagents and category into shared RecipeDB. The category is stored on
+            -- its own so recipes whose reagents are already complete still get one.
+            local reagents = GetRecipeReagentList(recipeID, schematic)
+            local existingReagents = self:GetRecipeReagents(key)
+            local newReagents = #reagents > 0
+                and (not existingReagents or #existingReagents < #reagents)
+            local category = GetRecipeCategoryName(info)
+            if newReagents or (category and category ~= self:GetRecipeCategory(key)) then
+                self:SetRecipeInfo(key, info.name, category, newReagents and reagents or nil)
+            end
+
+            if not recipes[key] then
+                local recipeData = {
+                    name = info.name or "",
+                    source = "",
+                }
+                recipes[key] = recipeData
+                newRecipes[key] = recipeData
+                newCount = newCount + 1
             end
         end
     end
 
-    GuildCrafts:Debug(string.format("ScanTradeSkillModern: %s: %d recipe IDs, %d learned, %d new",
-        profName, #recipeIDs, learnedCount, newCount))
+    GuildCrafts:Debug(string.format("ScanTradeSkillModern: %s: %d recipe IDs, %d learned, %d new%s",
+        profName, #recipeIDs, learnedCount, newCount,
+        strays > 0 and string.format(", %d from another profession skipped", strays) or ""))
     local changed = newCount > 0
     if newCount > 0 then
         AdvanceRevision(entry, profName)
