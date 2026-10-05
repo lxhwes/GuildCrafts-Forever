@@ -699,6 +699,80 @@ test("election F8: a DR that adopts a higher term keeps heartbeating", function(
     sim:assertAgreed("Ari Ash")
 end)
 
+test("election F13: HELLO traffic doesn't keep a logged-off DR elected", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    sim:assertAgreed("Ari Ash")
+    sim:logoff("Ari Ash")
+    -- Cid reloads every 50 s; each HELLO re-runs everyone's election.
+    for _ = 1, 8 do
+        sim:advance(50)
+        sim:send("Cid Cedar", "HELLO", { sender = cid, version = 3, isReply = true })
+    end
+    sim:advance(60)
+    -- Cid follows only once it ignores Bel's heartbeats as a watchdog refresh (F28).
+    sim:assertAgreed("Bel Birch", { "Bel Birch" })
+end)
+
+test("election F13: a retry>=2 request doesn't evict a DR that is still heartbeating", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar", "Dov Dune")
+    sim:assertAgreed("Ari Ash")
+    local term, since = sim.byName["Ari Ash"].Comms.currentTerm, now
+    -- Dov's earlier requests were lost, so it opens the round.
+    openRound(sim, "Dov Dune")
+    sim:advance(30)
+    for _, s in ipairs(sim.sends) do
+        if s.t == "SYNC_RESPONSE" and s.at >= since then
+            assert(s.from == "Ari Ash", s.from .. " answered the open round")
+        end
+    end
+    assert(sim:lastSend("Ari Ash", "SYNC_RESPONSE", since), "the DR didn't answer")
+    for _, name in ipairs({ "Bel Birch", "Cid Cedar" }) do
+        local c = sim.byName[name].Comms
+        assert(c.addonUsers[ari] and c.addonUsers[bel], name .. " evicted the DR or BDR")
+        assert(c.currentTerm == term, name .. " moved to term " .. c.currentTerm)
+    end
+    sim:advance(60)
+    sim:assertAgreed("Ari Ash")
+end)
+
+test("election F13: a paused DR keeps its role and answers the open round on resume", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar", "Dov Dune")
+    local ariNode = sim.byName["Ari Ash"]
+    local paused = true
+    ariNode.addon.SyncPausePolicy = { ShouldPause = function() return paused end }
+    local term, since = ariNode.Comms.currentTerm, now
+    openRound(sim, "Dov Dune")
+    sim:advance(10)
+    assert(not sim:lastSend("Ari Ash", "SYNC_RESPONSE", since), "paused DR answered")
+    local queue = ariNode.Comms.syncQueue
+    assert(#queue == 1 and queue[1].requester == dov, "paused DR queue holds " .. #queue .. " request(s)")
+    for _, name in ipairs({ "Bel Birch", "Cid Cedar" }) do
+        local c = sim.byName[name].Comms
+        assert(c.addonUsers[ari], name .. " evicted the paused DR")
+        assert(c.currentTerm == term, name .. " moved to term " .. c.currentTerm)
+    end
+    -- Combat ends within Dov's 15 s retry timeout (F29).
+    paused = false
+    ariNode.Comms:OnSyncPauseLifted()
+    sim:flush()
+    assert(sim:lastSend("Ari Ash", "SYNC_RESPONSE", since), "DR didn't answer after the pause")
+    sim:advance(60)
+    sim:assertAgreed("Ari Ash")
+end)
+
+test("election F13: the open round still re-elects when the DR and BDR are gone", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar", "Dov Dune")
+    local since = now
+    sim:logoff("Ari Ash")
+    sim:logoff("Bel Birch")
+    sim:advance(100)  -- one missed heartbeat, before any watchdog fires
+    openRound(sim, "Dov Dune")
+    sim:advance(5)
+    assert(sim:lastSend("Cid Cedar", "SYNC_RESPONSE", since), "nobody answered the open round")
+    sim:advance(60)
+    sim:assertAgreed("Cid Cedar")
+end)
+
 local failed = 0
 for _, case in ipairs(tests) do
     reset()

@@ -35,6 +35,7 @@ local HELLO_DELAY          = 3       -- delay after login before sending HELLO
 local SYNC_DELAY           = 15      -- delay after HELLO before SYNC_REQUEST
 local HEARTBEAT_INTERVAL   = 60      -- DR heartbeat broadcast interval
 local HEARTBEAT_TIMEOUT    = 180     -- 3 missed heartbeats → DR presumed dead
+local HEARTBEAT_OVERDUE    = 90      -- 1 missed heartbeat: enough to back a retry>=2 eviction
 local SYNC_TIMEOUT         = 120     -- wait for SYNC_RESPONSE before retry
 local SYNC_RETRY_TIMEOUT   = 15      -- wait for retry response before open round
 local SYNC_CHUNK_SIZE      = 5       -- max members per sync chunk
@@ -393,9 +394,12 @@ function Comms:RecomputeElection()
         end
     end
 
-    -- Always ensure DR watchdog is running if we're not DR
+    -- Watch the DR when we're not it. Restart only for a new DR: restarting on every
+    -- recompute let HELLO traffic keep a logged-off DR elected (F13).
     if self.myRole ~= "DR" and self.currentDR then
-        self:StartDRWatchdog()
+        if not self.drWatchdogTimer or self._watchdogDR ~= self.currentDR then
+            self:StartDRWatchdog()
+        end
     else
         self:StopDRWatchdog()
     end
@@ -477,6 +481,7 @@ end
 function Comms:StartDRWatchdog()
     self:StopDRWatchdog()
     self.lastDRHeartbeat = time() -- assume alive now
+    self._watchdogDR = self.currentDR
     self.drWatchdogTimer = self:ScheduleRepeatingTimer("CheckDRAlive", HEARTBEAT_INTERVAL)
 end
 
@@ -485,6 +490,17 @@ function Comms:StopDRWatchdog()
         self:CancelTimer(self.drWatchdogTimer)
         self.drWatchdogTimer = nil
     end
+    self._watchdogDR = nil
+end
+
+local function InInstance()
+    return IsInInstance ~= nil and select(1, IsInInstance()) and true or false
+end
+
+--- True when we, not the DR, have missed at least one of the DR's heartbeats.
+function Comms:IsDRHeartbeatOverdue()
+    if self.myRole == "DR" or not self.currentDR or InInstance() then return false end
+    return time() - self.lastDRHeartbeat > HEARTBEAT_OVERDUE
 end
 
 function Comms:CheckDRAlive()
@@ -496,8 +512,7 @@ function Comms:CheckDRAlive()
     -- GUILD addon messages are not delivered while inside an instance or arena.
     -- Suppress the DR eviction timer so we don't falsely elect ourselves just
     -- because we temporarily can't receive heartbeats.
-    local inInstance = IsInInstance and select(1, IsInInstance())
-    if inInstance then
+    if InInstance() then
         self.lastDRHeartbeat = time()  -- keep the timer fresh
         return
     end
@@ -663,17 +678,19 @@ function Comms:HandleSyncRequest(payload, sender)
     elseif retryCount == 1 and (self.myRole == "DR" or self.myRole == "BDR") then
         shouldRespond = true
     elseif retryCount >= 2 then
-        -- DR and BDR both failed to respond — evict and re-elect.
-        -- Only the newly elected DR responds, preventing a flood.
+        -- The requester says the DR and BDR both failed. Evict and re-elect only if
+        -- we've missed the DR's heartbeat too: one client's lost messages must not
+        -- evict a live DR guild-wide (F13). Only the newly elected DR responds.
         -- Skip eviction for peers still inside the backoff window — they may be
-        -- transiently slow. Peers with count < 2 (not yet in backoff) are evicted
-        -- as before.
+        -- transiently slow.
         local function shouldEvict(key)
             return key and key ~= playerKey and not self:IsPeerBackedOff(key)
         end
-        if shouldEvict(self.currentDR)  then self.addonUsers[self.currentDR]  = nil end
-        if shouldEvict(self.currentBDR) then self.addonUsers[self.currentBDR] = nil end
-        self:RecomputeElection()
+        if self:IsDRHeartbeatOverdue() then
+            if shouldEvict(self.currentDR)  then self.addonUsers[self.currentDR]  = nil end
+            if shouldEvict(self.currentBDR) then self.addonUsers[self.currentBDR] = nil end
+            self:RecomputeElection()
+        end
         if self.myRole == "DR" then
             shouldRespond = true
         end
