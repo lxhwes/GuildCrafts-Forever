@@ -26,7 +26,8 @@ is_branch() {
 }
 
 # Match actions/checkout: refs/tags/ is a tag, refs/heads/ a branch, and a bare name is a
-# branch if one exists, else a tag if one exists. Anything else is a SHA.
+# branch if one exists, else a tag if one exists (src/ref-helper.ts:54-58 at 3d3c42e, the
+# pinned v7.0.1). Anything else is a SHA.
 tag=
 case $ref in
     refs/tags/*) tag=${ref#refs/tags/} ;;

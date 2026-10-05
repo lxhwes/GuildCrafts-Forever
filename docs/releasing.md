@@ -79,7 +79,7 @@ section:
 The section runs from its heading to the line before the next `## ` heading, with trailing
 blank lines dropped. `CHANGELOG.md` indents every line by two spaces. The script removes that
 indent, so the notes are plain markdown. A bare `ref` that names both a branch and a tag counts
-as the branch, as `actions/checkout` does. `tools/test-release-notes.sh` covers these cases and
+as the branch, as `actions/checkout` does (`src/ref-helper.ts:54-58` at the pinned `3d3c42e`). `tools/test-release-notes.sh` covers these cases and
 runs from `tools/test-release-preflight.sh`, so CI runs it.
 
 The file is untracked and starts with a dot, so the packager never copies it into the zip. The
