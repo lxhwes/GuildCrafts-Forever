@@ -40,6 +40,14 @@ Run with a profession window open (H15, F12). First line: whether `C_TradeSkillU
 /run local T=C_TradeSkillUI;local c=T.GetCategoryInfo;local t={pcall(T.GetCategories)};print("CAT",c~=nil,t[1],#t-1,t[2]);for k=2,c and t[1]and min(#t,4)or 0 do local _,i=pcall(c,t[k]);print("CAT",t[k],type(i),i and i.name,i and i.parentCategoryID);end;
 ```
 
+## CATR
+
+Run with a profession window open (H15, F12), after CAT. One line per learned recipe: recipe ID, the recipe's `categoryName` (expected `nil`, since the struct has only `categoryID`), its `categoryID`, that category's name, and its parent category ID. A parent ID that CAT listed as a top-level category (2424 Alchemy, 2592 SEASON OF DISCOVERY on 2026-10-04) means categories are two levels deep. Any other parent ID means there's a third level. Alchemy has the fewest lines.
+
+```
+/run local T=C_TradeSkillUI;local g=T.GetCategoryInfo;for _,r in ipairs(T.GetAllRecipeIDs())do local i=T.GetRecipeInfo(r);if i.learned then local c=i.categoryID;local a=c and g(c)or{};print("CATR",r,i.categoryName,c,a.name,a.parentCategoryID);end;end;
+```
+
 ## EXP
 
 Run anywhere to read the expansion level APIs and client build: prints GetClassicExpansionLevel, GetExpansionLevel, GetServerExpansionLevel, LE_EXPANSION_LEVEL_CURRENT, build version and interface number, with nil for any API that doesn't exist.
@@ -182,10 +190,10 @@ Run anywhere (H14). `true`/`false` for global `SendChatMessage`, `C_ChatInfo.Sen
 
 ## TELL
 
-Run anywhere, after CHT (H14). Opens a whisper to your own two-word name and sends nothing. Prints your name and whether a tell function exists. If the chat box header reads `Tell First Surname:` with both words, the tell API handles two-word names. Press Escape to close it.
+Run anywhere, after CHT (H14). Opens a whisper to your own full name, both words, through the tell API, and sends nothing. Prints the name it used, whether a tell function exists, and the chat box header. A header of `Tell Geo Prizm: ` means the tell API keeps two-word names; `Tell Geo: ` means it splits them. Press Escape to close it. The 2026-10-04 run used only `UnitName`'s first return, so it tested a one-word name.
 
 ```
-/run local n=UnitName("player");local U=ChatFrameUtil;local f=U and U.SendTell or ChatFrame_SendTell;print("TELL",n,f~=nil);if f then f(n);end;
+/run local a,b=UnitName("player");local n=b and a.." "..b or a;local U=ChatFrameUtil;local f=U and U.SendTell or ChatFrame_SendTell;if f then f(n);end;local e=U and U.GetActiveWindow();print("TELL",n,f~=nil,e and e.header:GetText());
 ```
 
 ## RL
