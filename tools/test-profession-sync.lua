@@ -720,6 +720,22 @@ test("a recipe with no owner name yet holds the whole scan for a retry", functio
     assert(count(db[playerKey].professions.Alchemy) == 3, "the retry did not store the full list")
 end)
 
+test("a scan while the recipe list is being rebuilt stores nothing and retries", function()
+    local changing = true
+    window("Alchemy", function(id)
+        return { professionName = id == 203 and "Cooking" or "Alchemy" }
+    end)
+    C_TradeSkillUI.IsDataSourceChanging = function() return changing end
+    Data:ScanTradeSkillModern()
+    assert(not db[playerKey], "a scan during a rebuild touched the database")
+    assert(#sent == 0, "a scan during a rebuild broadcast")
+    assert(#timers == 1, "a rebuilding list did not retry")
+    assert(logged("data source changing"), "retry reason missing: " .. table.concat(debugs, " | "))
+    changing = false
+    table.remove(timers, 1).fn()
+    assert(count(db[playerKey].professions.Alchemy) == 2, "the settled list was not stored")
+end)
+
 test("without GetProfessionInfoByRecipeID the scan stores the whole list", function()
     window("Herbalism", nil)
     assert(Data:ScanTradeSkillModern())

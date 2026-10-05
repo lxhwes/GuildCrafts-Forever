@@ -1712,6 +1712,11 @@ function Data:ScanTradeSkillModern(isRetry)
         self:RetryModernScan(1, "IsTradeSkillReady() = false")
         return
     end
+    -- H21: Blizzard's frame skips list updates while this is true (Blizzard_ProfessionsFrame.lua:142).
+    if C_TradeSkillUI.IsDataSourceChanging and C_TradeSkillUI.IsDataSourceChanging() then
+        self:RetryModernScan(1, "data source changing")
+        return
+    end
     -- Don't scan linked/guild/NPC tradeskills — they aren't ours. Blizzard's own test for an
     -- external list (Blizzard_Professions.lua:377-378 at e3ecc27); guild views are off on 70205.
     if C_TradeSkillUI.IsTradeSkillLinked and C_TradeSkillUI.IsTradeSkillLinked() then
