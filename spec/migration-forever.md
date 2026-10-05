@@ -370,6 +370,7 @@ pasted the results into chat. `/gc report` read `Client: 1.60.1 | 70205 | Oct 2 
 | `[G]` (H14) | Posts as expected | `C_ChatInfo.SendChatMessage` path confirmed |
 | `[W]` (F20) | Not run | Needs a guildmate with the addon |
 | Minimap button | Shown (book icon), left-click toggles the window | — |
+| `/gc reset` (H7) | With the minimap button, `[Online]` and `[Tooltip]` all turned off, all three stayed off after the reset | PR #88 keeps settings in game |
 | `/gc report` | Has the `Sender fallbacks: accepted 0, refused 0, revoked 0` line. Tracked professions never log "not tracked"; First Aid and Fishing do, as expected until H17 | PR #94's report line works |
 
 Found during the run:
