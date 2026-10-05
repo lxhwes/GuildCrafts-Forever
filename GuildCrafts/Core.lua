@@ -227,6 +227,25 @@ end
 GuildCrafts._chatPostCooldowns = {}
 local CHAT_POST_COOLDOWN = 30  -- seconds
 
+--- Send one line to guild chat. Returns true if the client took it.
+--- Prefers C_ChatInfo.SendChatMessage: on Forever the global is a deprecated
+--- alias that exists only with the loadDeprecationFallbacks CVar on.
+--- Resolved per call, since either may be missing at load.
+function GuildCrafts:SendGuildChat(text)
+    local send = (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
+    if type(send) ~= "function" then
+        self:Debug("Guild chat send failed: no SendChatMessage API")
+        return false
+    end
+    local ok, result = pcall(send, text, "GUILD")
+    -- It returns nothing on success, so only an error or an explicit false counts.
+    if not ok or result == false then
+        self:Debug("Guild chat send failed:", result)
+        return false
+    end
+    return true
+end
+
 --- Sort and format a crafter list into a single chat-friendly string.
 --- Online crafters appear first; list is capped to stay within 255-byte
 --- guild chat limit.  Builds incrementally and stops when adding another
@@ -294,11 +313,14 @@ function GuildCrafts:PostCraftersToGuildChat(recipeName, recipeKey, crafters)
         self:Printf("No guild crafters found for %s.", recipeName)
         return
     end
-    self._chatPostCooldowns[recipeKey] = now
     local BROWSE_SUFFIX = " \226\128\148 /gc to browse"  -- em dash: 3 bytes
     local prefix = "[GuildCrafts] " .. recipeName .. ": "
     local line = self:FormatCraftersLine(crafters, prefix, nil, #BROWSE_SUFFIX)
-    SendChatMessage(prefix .. line .. BROWSE_SUFFIX, "GUILD")
+    if not self:SendGuildChat(prefix .. line .. BROWSE_SUFFIX) then
+        self:Print("Couldn't post to guild chat. /gc report has the reason.")
+        return
+    end
+    self._chatPostCooldowns[recipeKey] = now
 end
 
 -- Epoch of the last [GuildCrafts] message seen in guild chat.
@@ -369,8 +391,8 @@ function GuildCrafts:OnGuildChatMessage(_event, msg)
     local cooldownKey = query:lower()
     local now = time()
     if (now - (self._gcQueryCooldowns[cooldownKey] or 0)) < CHAT_POST_COOLDOWN then return end
-    -- Cooldown is stamped only on a successful response (see below),
-    -- so a no-match query can be retried immediately with a corrected spelling.
+    -- Stamped after any reply that posts, match or miss (see below). A corrected
+    -- spelling is a different key, so it can still be asked straight away.
 
     -- Staggered delay: DR=0 s, BDR=5 s, anyone else=12–20 s.
     -- In-instance clients have already returned above because they cannot
@@ -437,21 +459,13 @@ function GuildCrafts:OnGuildChatMessage(_event, msg)
         if not results or #results == 0 then
             results = self.Data:SearchRecipes(capturedQuery, true)
         end
-        if not results or #results == 0 then
-            -- No match — do NOT set the cooldown so the user can retry immediately.
-            if self.Comms and self.Comms.BroadcastGcAck then self.Comms:BroadcastGcAck() end
-            SendChatMessage("[GuildCrafts] No guild crafter found for \"" .. capturedQuery .. "\" \226\128\148 /gc to browse all recipes", "GUILD")
-            return
-        end
-        -- Successful response — stamp the cooldown now to prevent spam.
-        self._gcQueryCooldowns[capturedCooldown] = time()
-
-        -- Broadcast an addon-channel ACK BEFORE posting to guild chat so any
-        -- other responder still in its jitter window skips its own reply.
-        if self.Comms and self.Comms.BroadcastGcAck then self.Comms:BroadcastGcAck() end
-
-        -- Stagger multi-line responses 0.5 s apart to avoid "sending too quickly"
+        -- Replies carry only GuildCrafts' own data, never the asker's text, so
+        -- nobody can make the responder post arbitrary text.
+        results = results or {}
         local msgQueue = {}
+        if #results == 0 then
+            msgQueue[1] = "[GuildCrafts] No guild crafter found \226\128\148 /gc to browse all recipes"
+        end
         local posted = 0
         for _, result in ipairs(results) do
             if posted >= 3 then break end
@@ -463,14 +477,18 @@ function GuildCrafts:OnGuildChatMessage(_event, msg)
         if #results > 3 then
             msgQueue[#msgQueue + 1] = "[GuildCrafts] +" .. (#results - 3) .. " more result(s) \226\128\148 /gc to browse"
         end
-        for i, chatMsg in ipairs(msgQueue) do
-            if i == 1 then
-                SendChatMessage(chatMsg, "GUILD")
-            else
-                self:ScheduleTimer(function()
-                    SendChatMessage(chatMsg, "GUILD")
-                end, (i - 1) * 0.5)
-            end
+        -- On a failed post, send no ACK so another responder can still answer.
+        if not self:SendGuildChat(msgQueue[1]) then return end
+        self._gcQueryCooldowns[capturedCooldown] = time()
+        -- The ACK reaches other responders faster than the guild-chat echo.
+        if self.Comms and self.Comms.BroadcastGcAck then self.Comms:BroadcastGcAck() end
+
+        -- Stagger multi-line responses 0.5 s apart to avoid "sending too quickly"
+        for i = 2, #msgQueue do
+            local chatMsg = msgQueue[i]
+            self:ScheduleTimer(function()
+                self:SendGuildChat(chatMsg)
+            end, (i - 1) * 0.5)
         end
     end, delay)
 end
