@@ -20,6 +20,11 @@ tools/*
 !tools/test-*.lua
 !tools/test-*.sh
 !tools/check-plan-index.sh
+!tools/codex-review.sh
+!tools/codex-review.schema.json
 
 # Release notes written by .github/scripts/release-notes.sh
 .release-notes.md
+
+# Codex review runs written by tools/codex-review.sh
+.codex-review/
