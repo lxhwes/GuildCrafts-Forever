@@ -69,6 +69,13 @@ local SENDER_KEY_FIELD = {
     [MSG_HELLO]     = "sender",
     [MSG_HEARTBEAT] = "dr",
 }
+-- Payload fields the handlers read as the sender's own key. On Forever they must
+-- equal the resolved sender.
+local SELF_KEY_FIELD = {
+    [MSG_HELLO]        = "sender",
+    [MSG_HEARTBEAT]    = "dr",
+    [MSG_SYNC_REQUEST] = "sender",
+}
 -- Covers the login HELLO through a full sync with retries; DR heartbeats refresh it.
 local SENDER_FALLBACK_TTL = 300
 local SENDER_FALLBACK_MAX = 40
@@ -1522,12 +1529,6 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
             self:RevokeSenderFallback(rawSender, entry, reason)
             return nil, reason
         end
-        -- HandleSyncRequest trusts payload.sender, so it must match the cached key.
-        local requester = envelope.t == MSG_SYNC_REQUEST and type(envelope.p) == "table" and envelope.p.sender
-        if requester and requester ~= key then
-            self.senderFallbackRefusals = self.senderFallbackRefusals + 1
-            return nil, "payload sender " .. tostring(requester) .. " isn't cached " .. key
-        end
         entry.at = now
         self.senderFallbacks = self.senderFallbacks + 1
         GuildCrafts:Debug("Sender fallback:", envelope.t, "from", rawSender, "keyed by cached", key)
@@ -1642,6 +1643,15 @@ function Comms:ProcessIncoming(message, distribution, sender)
             return
         end
         viaFallback = true
+    end
+    -- Forever: HELLO, HEARTBEAT and SYNC_REQUEST may only speak for their own sender.
+    local selfField = GuildCrafts.Data.CheckSenderClaim and SELF_KEY_FIELD[envelope.t]
+    local claimed = selfField and type(envelope.p) == "table" and envelope.p[selfField]
+    if claimed ~= nil and claimed ~= false and GuildCrafts.Data:NormalizeMemberKey(claimed) ~= sender then
+        self.senderFallbackRefusals = self.senderFallbackRefusals + 1
+        GuildCrafts:Debug("Sender mismatch:", envelope.t, "from", rawSender, "(" .. sender .. ")",
+            "claims", tostring(claimed))
+        return
     end
     local wasKnown = self.addonUsers[sender] ~= nil
     if sender ~= GuildCrafts.Data:GetPlayerKey() then

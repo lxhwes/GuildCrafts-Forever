@@ -243,7 +243,36 @@ test("a cached sender's SYNC_REQUEST can't name a different requester", function
     assert(Comms.addonUsers[other] == nil, "requester GUID taken from the payload")
     assert(Comms.senderFallbackRefusals == 1, "refusal not counted")
     receive("Kuw Pal", "SYNC_REQUEST", { sender = kuw, vector = {}, retry = 0 })
-    assert(Comms.unresolvedSenderDrops == 1, "matching request dropped")
+    assert(Comms.unresolvedSenderDrops == 0, "drops: " .. Comms.unresolvedSenderDrops)
+end)
+
+test("a resolved sender can't claim another GUID in HELLO, HEARTBEAT or SYNC_REQUEST", function()
+    receive("Motiv Hysteria", "HELLO", { sender = kuw, version = 3 })
+    receive("Motiv Hysteria", "HEARTBEAT", { dr = kuw, timestamp = now })
+    receive("Motiv Hysteria", "SYNC_REQUEST", { sender = kuw, vector = {}, retry = 0 })
+    assert(Comms.addonUsers[kuw] == nil, "claimed GUID registered")
+    assert(Comms.addonUsers[motiv] == nil, "mismatched message handled")
+    assert(Comms.lastDRHeartbeat == 0, "mismatched heartbeat recorded")
+    assert(Comms.senderFallbackRefusals == 3, "refusals: " .. Comms.senderFallbackRefusals)
+    assert(Comms.unresolvedSenderDrops == 0, "mismatch counted as unresolved")
+    assert(wasLogged("Sender mismatch: HEARTBEAT from Motiv Hysteria (" .. motiv .. ") claims " .. kuw),
+        "mismatch not logged")
+    receive("Motiv Hysteria", "HELLO", { sender = motiv, version = 3 })
+    assert(Comms.addonUsers[motiv], "matching HELLO dropped")
+end)
+
+test("a revoked false claim doesn't come back on the next HELLO", function()
+    coldStart()
+    local claimed = "Player-4613-00000001"
+    receive("Kuw Pal", "HELLO", { sender = claimed, version = 3 })
+    roster = { { "Geo Prizm", true, me }, { "Kuw Pal", true, kuw } }
+    now = now + 10
+    receive("Kuw Pal", "HELLO", { sender = claimed, version = 3 })
+    assert(Comms.senderFallbackRevocations == 1, "revocation not counted")
+    assert(Comms.addonUsers[claimed] == nil, "false claim came back")
+    assert(Comms.currentDR ~= claimed, "false claim still DR")
+    receive("Kuw Pal", "HELLO", { sender = kuw, version = 3 })
+    assert(Comms.currentDR == kuw, "DR is " .. tostring(Comms.currentDR))
 end)
 
 test("whispers to a fallback-keyed GUID go to the name that sent it", function()
@@ -392,6 +421,11 @@ test("Classic is unaffected: no ForeverIdentity, no payload fallback", function(
         classic.Deserialize = function() return true, { t = "HELLO", v = 3, p = { sender = "Bob-Realm" } } end
         classic:OnCommReceived("GuildCrafts", "Uxx", "GUILD", "Bob")
         assert(classic.addonUsers["Bob-Realm"], "Classic HELLO not handled")
+        -- Classic still keys HELLO by its payload sender, as before F26.
+        classic.Deserialize = function() return true, { t = "HELLO", v = 3, p = { sender = "Alice-Realm" } } end
+        classic:OnCommReceived("GuildCrafts", "Uxx", "GUILD", "Bob")
+        assert(classic.addonUsers["Alice-Realm"], "Classic payload sender refused")
+        assert(classic.senderFallbackRefusals == 0, "Classic counted a refusal")
     end)
     GuildCrafts = forever
     assert(ok, err)
