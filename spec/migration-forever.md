@@ -390,6 +390,20 @@ Found during the run:
   them. The tooltip's `@project-version@` is expected for a copy run from source; the packager
   fills it in.
 
+Re-checked after #99, #100 and #101 merged (`d2ceff0`), later the same day:
+- **H21 fixed in game.** After `/gc reset`, Alchemy, Herbalism, Cooking, First Aid and Fishing were
+  opened in quick succession. `/gc report` then stored Alchemy 7, Cooking 5 and Herbalism 1, which
+  matches TS's learned counts. The debug log shows `data source changing - retry 1 in 1s` followed by
+  a clean scan, with no "giving up" lines, and Herbalism's partial-scan guard no longer fires. #98
+  is closed.
+- **Addon list and compartment (#99).** The addon list shows the book icon under "Professions". The
+  minimap drawer has a GuildCrafts entry: a click toggles the window, and hovering shows the tooltip.
+- **Paused deltas, reproduced.** The first scans after the reload landed inside the zone-transition
+  pause (`12:50:20`–`:22`), so `BroadcastNewRecipes suppressed (SyncPausePolicy)` was logged for 13
+  new recipes (Alchemy 7, Herbalism 1, Cooking 5). Those deltas aren't queued, so peers catch up at
+  their next login sync. It's tracked in #15 for wave 1, along with Codex's merge-guard finding from
+  #101's review.
+
 ---
 
 ## Test results
