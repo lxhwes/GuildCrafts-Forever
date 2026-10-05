@@ -290,17 +290,18 @@ test("a quiet claim gives way to another sender after the TTL", function()
     assert(Comms._senderFallback["Alt One"] == nil, "quiet claimant kept")
 end)
 
-test("a GUID the fallback added is evicted on revocation after a cache eviction", function()
+test("a full cache keeps active peers and refuses a new claim", function()
     coldStart()
     local claimed = "Player-4613-00000001"
     receive("Kuw Pal", "HELLO", { sender = claimed, version = 3 })
-    for i = 1, Comms.SENDER_FALLBACK_MAX do
+    for i = 2, Comms.SENDER_FALLBACK_MAX + 1 do
         now = now + 1
         receive("Alt " .. i, "HELLO", { sender = string.format("Player-4619-%08X", 0x100 + i), version = 3 })
     end
-    assert(Comms._senderFallback["Kuw Pal"] == nil, "first entry not evicted")
-    now = now + 1
-    receive("Kuw Pal", "HELLO", { sender = claimed, version = 3 })
+    assert(Comms._senderFallback["Kuw Pal"], "active peer's mapping evicted")
+    assert(Comms.senderFallbackRefusals == 1, "refusals: " .. Comms.senderFallbackRefusals)
+    assert(Comms:FallbackWhisperTarget(claimed) == "Kuw Pal", "active peer lost its whisper target")
+    -- The roster then contradicts the oldest claim with no fresh HELLO to rebuild it.
     roster = { { "Geo Prizm", true, me }, { "Kuw Pal", true, kuw } }
     now = now + 10
     receive("Kuw Pal", "GC_ACK")
@@ -308,17 +309,22 @@ test("a GUID the fallback added is evicted on revocation after a cache eviction"
     assert(Comms.currentDR == kuw, "DR is " .. tostring(Comms.currentDR))
 end)
 
-test("the fallback cache is bounded and drops its oldest entry", function()
+test("a full cache drops its oldest inactive entry for a new claim", function()
     coldStart()
     local max = Comms.SENDER_FALLBACK_MAX
     for i = 1, max + 1 do
         now = now + 1
+        if i == max + 1 then
+            Comms.addonUsers["Player-4613-00000002"] = nil  -- Alt 2 left the election
+            now = now + Comms.SENDER_FALLBACK_TTL
+        end
         receive("Alt " .. i, "HELLO", { sender = string.format("Player-4613-%08X", i), version = 3 })
     end
     local count = 0
     for _ in pairs(Comms._senderFallback) do count = count + 1 end
     assert(count == max, count .. " cache entries")
-    assert(Comms._senderFallback["Alt 1"] == nil, "oldest entry kept")
+    assert(Comms._senderFallback["Alt 1"], "active entry evicted")
+    assert(Comms._senderFallback["Alt 2"] == nil, "inactive entry kept")
     assert(Comms._senderFallback["Alt " .. (max + 1)], "newest entry missing")
 end)
 

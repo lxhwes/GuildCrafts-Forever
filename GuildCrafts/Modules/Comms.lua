@@ -1551,6 +1551,22 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
             end
         end
     end
+    -- Full cache: drop the oldest entry whose peer has left the election, never an active one.
+    local evict
+    if not reason and not entry then
+        local count, oldestAt = 0, nil
+        for name, other in pairs(fallback) do
+            count = count + 1
+            if not self.addonUsers[other.key] and (not oldestAt or other.at < oldestAt) then
+                evict, oldestAt = name, other.at
+            end
+        end
+        if count < SENDER_FALLBACK_MAX then
+            evict = nil
+        elseif not evict then
+            reason = "fallback cache full"
+        end
+    end
     if not reason then key, reason = Data:CheckSenderClaim(rawSender, claim) end
     if not key then
         self.senderFallbackRefusals = self.senderFallbackRefusals + 1
@@ -1559,12 +1575,7 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
     end
 
     if not entry then
-        local count, oldestName, oldestAt = 0, nil, nil
-        for name, other in pairs(fallback) do
-            count = count + 1
-            if not oldestAt or other.at < oldestAt then oldestName, oldestAt = name, other.at end
-        end
-        if count >= SENDER_FALLBACK_MAX then fallback[oldestName] = nil end
+        if evict then fallback[evict] = nil end
         entry = { key = key }
         fallback[rawSender] = entry
     end
