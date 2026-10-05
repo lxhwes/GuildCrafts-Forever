@@ -340,11 +340,18 @@ list (no Jewelcrafting or Inscription; `Test Profession [DNT]` on 2933 and 2934)
 | `GTS` | All five functions return `false` on Alex's own profession. The client doesn't offer a guildmate's profession from the roster | `IsGuildTradeSkillsEnabled` is false. `IsTradeSkillLinked`, `IsTradeSkillGuild` and `IsTradeSkillGuildMember` exist, though the API docs don't list them; Blizzard calls all three (`Blizzard_ProfessionsTemplates/Blizzard_Professions.lua:378`). The linked-view skip in the scan is live. A guild view can't be opened on this build, so F5 can't happen here yet |
 | `CHL` | `CHL true true true true` | `ChatFrameUtil.InsertLink` and `OpenChat` exist, which PR #79 uses. Clicking shift-click and `[W]` is still unchecked |
 | `CHT` | `CHT true true false true true true` | Both `SendChatMessage` and `C_ChatInfo.SendChatMessage` exist, and they're different functions. The global is a wrapper in `Blizzard_DeprecatedChatInfo/Deprecated_ChatInfo.lua:8-10`, defined only when the `loadDeprecationFallbacks` CVar is on (`:4`). The `ChatEdit_InsertLink`, `ChatFrame_OpenChat` and `ChatFrame_SendTell` globals come from the same gated file (`Deprecated_ChatFrame.lua:4`, `:43`, `:74`, `:84`). The TOC notes say they "will be removed at the next expansion". `!gc` and `[G]` call the global, so they depend on that CVar |
-| `TELL` | `TELL Geo true`; no header reported | Not a two-word test. The probe used only `UnitName`'s first return, so it opened a whisper to `Geo`. Fixed in `docs/ingame-commands.md`; re-run pending |
+| `TELL` | `TELL Geo true`; no header reported | Not a two-word test. The probe used only `UnitName`'s first return, so it opened a whisper to `Geo`. Fixed and re-run; see below |
 | `RL` | `RL true true true nil` | `ReloadUI` and `C_UI.Reload` exist. `issecurevariable("ReloadUI")` returned `true`, `nil`: secure, and no addon has tainted it |
 | `RLX` | "it reloaded" | `ReloadUI()` called from insecure code reloads the UI. It isn't protected on 70205, so F14's premise is wrong |
 
 Not run: `RE`, which needs a dungeon (Q2).
+
+Follow-up the same evening, gist comment 6406842 (02:40 UTC), with Alchemy open for CATR:
+
+| Probe | Result | What it settles |
+|---|---|---|
+| `CATR` | 7 lines, one per learned recipe. `categoryName` is `nil` on every line. `categoryID` and name: `2454 Camping`, `2621 Recovery Potions`, and `2450 Elixirs` for the other five. Every parent is `2424` (Alchemy) | F12 is confirmed in game: the recipe struct has no `categoryName`. A recipe's own `categoryID` names the heading Blizzard's list shows, one level under the profession. So the fix is one `GetCategoryInfo(info.categoryID).name` lookup, with no walk up the parents. None of the 7 learned recipes sits under `2592 SEASON OF DISCOVERY` |
+| `TELL` (fixed) | `TELL Geo Prizm true Tell Geo Prizm:` | `ChatFrameUtil.SendTell("Geo Prizm")` opens a whisper to the full two-word name. That's Blizzard's tell path, which types `/w Geo Prizm` with no message. GuildCrafts' `[W]` sets the target directly instead (PR #79), and clicking it is still unchecked |
 
 ---
 
