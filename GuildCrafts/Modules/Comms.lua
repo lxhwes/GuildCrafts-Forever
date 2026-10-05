@@ -447,7 +447,6 @@ function Comms:HandleHeartbeat(payload)
     -- RecomputeElection() always has complete peer information.
     local heartbeatKey = GuildCrafts.Data:NormalizeMemberKey(payload.dr)
     if heartbeatKey then
-        self.lastDRHeartbeat = time()
         if not self.addonUsers[heartbeatKey] then
             self.addonUsers[heartbeatKey] = {
                 version  = 1,
@@ -469,6 +468,11 @@ function Comms:HandleHeartbeat(payload)
     -- Always recompute after a valid heartbeat so currentDR/BDR stay accurate
     -- in the sync panel and role change log.
     self:RecomputeElection()
+    -- Only our DR's heartbeat proves it alive. Any other one kept a logged-off DR
+    -- elected after a character switch (F28).
+    if heartbeatKey and heartbeatKey == self.currentDR then
+        self.lastDRHeartbeat = time()
+    end
     if GuildCrafts.UI and GuildCrafts.UI.UpdateSyncIndicator then
         GuildCrafts.UI:UpdateSyncIndicator()
     end

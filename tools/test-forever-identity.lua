@@ -709,8 +709,7 @@ test("election F13: HELLO traffic doesn't keep a logged-off DR elected", functio
         sim:send("Cid Cedar", "HELLO", { sender = cid, version = 3, isReply = true })
     end
     sim:advance(60)
-    -- Cid follows only once it ignores Bel's heartbeats as a watchdog refresh (F28).
-    sim:assertAgreed("Bel Birch", { "Bel Birch" })
+    sim:assertAgreed("Bel Birch")
 end)
 
 test("election F13: a retry>=2 request doesn't evict a DR that is still heartbeating", function()
@@ -771,6 +770,32 @@ test("election F13: the open round still re-elects when the DR and BDR are gone"
     assert(sim:lastSend("Cid Cedar", "SYNC_RESPONSE", since), "nobody answered the open round")
     sim:advance(60)
     sim:assertAgreed("Cid Cedar")
+end)
+
+test("election F28: after a character switch the old DR is evicted", function()
+    -- Same account: Ari logs off and Bel logs in; Cid stays online throughout.
+    local sim = guild("Ari Ash", "Cid Cedar")
+    sim:assertAgreed("Ari Ash")
+    sim:logoff("Ari Ash")
+    sim:advance(5)
+    sim:login("Bel Birch")
+    sim:advance(300)
+    assert(sim.byName["Cid Cedar"].Comms.addonUsers[ari] == nil, "Cid still lists the logged-off DR")
+    sim:assertAgreed("Bel Birch")
+end)
+
+test("election: the DR changes hands and back, and every client follows", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    sim:assertAgreed("Ari Ash")
+    local term = sim.byName["Ari Ash"].Comms.currentTerm
+    sim:logoff("Ari Ash")
+    sim:advance(250)
+    sim:assertAgreed("Bel Birch")
+    assert(sim.byName["Bel Birch"].Comms.currentTerm > term, "the new DR didn't advance the term")
+    -- Ari logs back in with a fresh session and term 0, still the lowest GUID.
+    sim:login("Ari Ash")
+    sim:advance(120)
+    sim:assertAgreed("Ari Ash")
 end)
 
 local failed = 0
