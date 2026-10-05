@@ -192,7 +192,7 @@ out of scope (C5 in `spec/forever-plan.md`).
 Forever blocks addon messages during some activities. Approved 2026-10-02 and implemented in
 `Modules/SyncPausePolicy.lua` (`71526af`). `RA` and `RS` confirmed the API in game. Whether the
 event fires at a boss pull is still open: Q2 in `spec/forever-plan.md`, answered by the `RE`
-probe in `docs/testing.md` section R.
+probe in `docs/ingame-commands.md`, which `docs/testing.md` section R runs.
 
 ### Documented signals (source only, never run in game)
 
@@ -292,6 +292,9 @@ after load, not whether the addon loads.
   apply. `/gc drop` performs a live profession read and preserves recipes if the API errors
   or returns an unnamed occupied slot. A successful empty read is accepted for this
   explicit command, allowing removal after the last profession is unlearned.
+  **H9 (PR #43, issue closed 2026-10-04) reverses that for Forever:** on a client with no
+  skill-line source, an empty `GetProfessions()` read now counts as unreadable, so `/gc drop`
+  refuses and asks the player to try again. Clients with skill lines still accept it.
   Professions have their own `lastUpdate`; unrelated updates cannot block a removal.
   Local mutations advance `lastUpdate` to `max(time(), previous + 1)`; no-change scans
   cannot move it backwards. Equal-version sync exchanges entries with drop history and
@@ -302,9 +305,10 @@ after load, not whether the addon loads.
   for these fixes have not been supplied.
 - **`/gc reset` calls `ReloadUI()` (F14).** Reported as protected on Forever; unverified. Planned
   as H7.
-- **Favorites store booleans.** `Modules/Favorites.lua` writes `favoriteRecipes[key] = true`
-  and `favoriteMembers[key] = true` to `GuildCraftsCharDB`. Under the 1/0 rule, those need a
-  round-trip check on Forever, or a switch to `1`. Not changed yet; planned as H13.
+- **Favorites stored booleans. Fixed in H13 (PR #67, issue closed 2026-10-04).**
+  `Modules/Favorites.lua` wrote `favoriteRecipes[key] = true` and `favoriteMembers[key] = true`
+  to `GuildCraftsCharDB`. It now stores `1`, under the 1/0 rule, and rewrites saved `true`
+  entries as `1` at login. `tools/test-favorites.lua` covers it.
 
 ---
 
@@ -406,8 +410,12 @@ Answers and partial answers from the in-game runs. Open questions are tracked in
 questions" table of `spec/forever-plan.md`; each entry below names its Q number there.
 
 1. **Client build** of the 2026-10-02 runs. `GetBuildInfo()` printed only the `1.60.1` version
-   string; the build number (second return) wasn't captured. Open as Q1, to be closed by
-   `/gc report` (H5).
+   string; the build number (second return) wasn't captured. Open as Q1. `/gc report` landed
+   in H5 (PR #50) and prints every `GetBuildInfo()` return on its `Client:` line. Q1 closes
+   once that line from the Forever client is recorded here. Unverified: on 2026-10-03
+   wago.tools listed build 1.60.1.70205 under `wow_classic_beta`
+   (`spec/later/research/2026-10-03-companion-n9.md`), newer than the `70170` pin. The
+   `Client:` line will show whether the client has patched past the pin.
 2. **`C_RestrictedActions` at runtime.** Does it exist, and does
    `ADDON_RESTRICTION_STATE_CHANGED` fire on entering a boss encounter? Task 4 depends on it.
    Probes: `RA`, `RS`, `RE`. **Partly answered 2026-10-02:** `RA true true true true false`, so
@@ -427,4 +435,6 @@ questions" table of `spec/forever-plan.md`; each entry below names its Q number 
    `Alchemy: 5 recipes` under the same guild key, `Grim-Classic Beta PvP`. So SavedVariables
    survived the relog and the partition key didn't move between those sessions. That rules
    out a partition change for this pair of sessions. Either no window was opened before the
-   first dump, or the scan exited silently. Open as Q4 (H5, H6).
+   first dump, or the scan exited silently. Open as Q4. H5 and H6 have landed (PRs #50, #76),
+   so every scan early-exit now leaves a reason in `/gc report`. Q4 closes after the
+   reproduction in #26 is recorded.

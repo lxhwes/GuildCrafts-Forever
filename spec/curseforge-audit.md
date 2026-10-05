@@ -193,7 +193,8 @@ it (unverified on Forever).
   taking portals. Then compare against the same run with the addon off, using the client's
   frame-time readout. Repeat during a raid-night login window.
 
-Carried into #8, #9 and #44 (H19) on 2026-10-03.
+Carried into #8, #9 and #44 (H19) on 2026-10-03. Update 2026-10-04: #8 and #9 closed without
+M1–M4 (PRs #50, #76), so only #44 (H19) tracks them now.
 
 ### Discovery failures
 
