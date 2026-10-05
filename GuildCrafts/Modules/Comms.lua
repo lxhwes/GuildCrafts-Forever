@@ -39,6 +39,9 @@ local SYNC_TIMEOUT         = 120     -- wait for SYNC_RESPONSE before retry
 local SYNC_RETRY_TIMEOUT   = 15      -- wait for retry response before open round
 local SYNC_CHUNK_SIZE      = 5       -- max members per sync chunk
 local SYNC_CHUNK_DELAY     = 1.0     -- seconds between chunks (avoids burst lag)
+local SYNC_QUEUE_MAX       = 40      -- queued SYNC_REQUESTs the DR holds, one per requester
+Comms.SYNC_QUEUE_MAX = SYNC_QUEUE_MAX
+Comms.SYNC_TIMEOUT, Comms.SYNC_RETRY_TIMEOUT = SYNC_TIMEOUT, SYNC_RETRY_TIMEOUT
 
 -- ChatThrottleLib priorities
 local PRIO_BULK   = "BULK"
@@ -180,6 +183,16 @@ function Comms:OnEnable()
 
     -- Register for AceComm messages
     self:RegisterComm(PREFIX, "OnCommReceived")
+
+    -- A paused DR holds its sync queue (F29) until this fires.
+    if GuildCrafts.SyncPausePolicy then
+        GuildCrafts.SyncPausePolicy:OnResume(self, function() self:OnSyncPauseLifted() end)
+    end
+end
+
+local function IsSyncPaused()
+    local policy = GuildCrafts.SyncPausePolicy
+    return policy ~= nil and policy:ShouldPause()
 end
 
 ----------------------------------------------------------------------
@@ -670,12 +683,10 @@ function Comms:HandleSyncRequest(payload, sender)
 
     GuildCrafts:Debug("Handling SYNC_REQUEST from", requester, "(role:", self.myRole, ")")
 
-    -- Queue if we're already processing a sync (DR queuing)
-    if self.syncProcessing then
-        self.syncQueue[#self.syncQueue + 1] = {
-            requester = requester, vector = payload.vector, restoreOwn = payload.restoreOwn,
-        }
-        GuildCrafts:Debug("Queued SYNC_REQUEST from", requester, "(queue size:", #self.syncQueue, ")")
+    -- Queue if we're already processing a sync, or paused: a paused response
+    -- would be built and then suppressed (F29).
+    if self.syncProcessing or IsSyncPaused() then
+        self:QueueSyncRequest(requester, payload, retryCount)
         return
     end
 
@@ -787,12 +798,75 @@ function Comms:ProcessSyncRequest(requester, incomingVector, restoreOwn)
     end
 end
 
-function Comms:ProcessNextSyncQueue()
-    if #self.syncQueue > 0 then
-        local next = table.remove(self.syncQueue, 1)
-        GuildCrafts:Debug("Processing queued SYNC_REQUEST from", next.requester)
-        self:ProcessSyncRequest(next.requester, next.vector, next.restoreOwn)
+--- Why a queued request should no longer be answered, or nil.
+function Comms:QueuedSyncRequestDropReason(entry, now)
+    -- After this the requester has re-asked the BDR or re-elected, so a late
+    -- reply only duplicates.
+    local wait = (entry.retry or 0) == 0 and SYNC_TIMEOUT or SYNC_RETRY_TIMEOUT
+    if now - entry.queuedAt > wait then return "requester timed out" end
+    -- Whispering a player who logged off prints a system error. Only a roster read
+    -- after the request counts: the request itself proved them online.
+    local data = GuildCrafts.Data
+    if data._onlineCache and data._onlineCache[entry.requester] == false
+            and (data._onlineCacheAt or 0) > entry.queuedAt then
+        return "requester offline"
     end
+    if self.myRole == "DR" then return nil end
+    if entry.retry == 1 and self.myRole == "BDR" then return nil end
+    return "no longer " .. (entry.retry == 1 and "DR or BDR" or "DR")
+end
+
+function Comms:QueueSyncRequest(requester, payload, retryCount)
+    local queue, now = self.syncQueue, time()
+    for i = #queue, 1, -1 do
+        local reason = self:QueuedSyncRequestDropReason(queue[i], now)
+        if reason then
+            GuildCrafts:Debug("Dropped queued SYNC_REQUEST from", queue[i].requester, "—", reason)
+            table.remove(queue, i)
+        end
+    end
+    local entry
+    for _, queued in ipairs(queue) do
+        if queued.requester == requester then entry = queued break end
+    end
+    if not entry then
+        if #queue >= SYNC_QUEUE_MAX then
+            GuildCrafts:Debug("Sync queue full — dropped SYNC_REQUEST from", requester)
+            return
+        end
+        entry = { requester = requester }
+        queue[#queue + 1] = entry
+    end
+    -- A repeat request keeps its place and carries the newest vector.
+    entry.vector, entry.restoreOwn = payload.vector, payload.restoreOwn
+    entry.retry, entry.queuedAt = retryCount, now
+    GuildCrafts:Debug("Queued SYNC_REQUEST from", requester, "(queue size:", #queue, ")")
+end
+
+function Comms:ProcessNextSyncQueue()
+    if IsSyncPaused() then
+        if #self.syncQueue > 0 then
+            GuildCrafts:Debug("Sync paused — holding", #self.syncQueue, "queued SYNC_REQUEST(s)")
+        end
+        return
+    end
+    local now = time()
+    while #self.syncQueue > 0 do
+        local entry = table.remove(self.syncQueue, 1)
+        local reason = self:QueuedSyncRequestDropReason(entry, now)
+        if not reason then
+            GuildCrafts:Debug("Processing queued SYNC_REQUEST from", entry.requester)
+            self:ProcessSyncRequest(entry.requester, entry.vector, entry.restoreOwn)
+            return
+        end
+        GuildCrafts:Debug("Dropped queued SYNC_REQUEST from", entry.requester, "—", reason)
+    end
+end
+
+--- SyncPausePolicy resume callback. A transfer still in flight drains the
+--- queue itself when its last chunk goes out.
+function Comms:OnSyncPauseLifted()
+    if not self.syncProcessing then self:ProcessNextSyncQueue() end
 end
 
 ----------------------------------------------------------------------
@@ -1324,9 +1398,8 @@ end
 function Comms:SendChunked(msgType, memberData, target, totalCount, onComplete)
     if GuildCrafts.SyncPausePolicy and GuildCrafts.SyncPausePolicy:ShouldPause() then
         GuildCrafts:Debug("SendChunked suppressed (SyncPausePolicy):", msgType)
-        -- We must still call onComplete so syncProcessing is cleared and the
-        -- DR's queue doesn't deadlock permanently. Affected requesters will not
-        -- receive their SYNC_RESPONSE and will retry via SYNC_TIMEOUT (120 s).
+        -- Still call onComplete so syncProcessing clears; the queue then holds
+        -- until the pause lifts. The requester retries via SYNC_TIMEOUT.
         if onComplete then onComplete() end
         return
     end

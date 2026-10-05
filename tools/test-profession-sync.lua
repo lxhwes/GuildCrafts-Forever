@@ -45,7 +45,8 @@ GuildCrafts = {
 }
 dofile("GuildCrafts/Modules/Data.lua")
 dofile("GuildCrafts/Modules/Comms.lua")
-local Data, Comms = GuildCrafts.Data, GuildCrafts.Comms
+dofile("GuildCrafts/Modules/SyncPausePolicy.lua")
+local Data, Comms, Pause = GuildCrafts.Data, GuildCrafts.Comms, GuildCrafts.SyncPausePolicy
 Data.GetGuildDB = function() return db end
 Data.GetPlayerKey = function() return playerKey end
 Data.GetGuildKey = function() return nil end
@@ -53,14 +54,20 @@ Data.ScheduleTimer = function(_, fn, delay)
     timers[#timers + 1] = { fn = fn, delay = delay }
 end
 Data.db = { global = {} }
-Comms.TouchAddonUser = function() end
-Comms.ProcessNextSyncQueue = function() end
-local sent
-Comms.SendMessage = function(_, kind, payload)
-    sent[#sent + 1] = { kind = kind, payload = payload }
+Pause.ScheduleTimer = function(_, fn, delay)
+    timers[#timers + 1] = { fn = fn, delay = delay }
+    return #timers
 end
-Comms.SendChunked = function(_, kind, data, _, _, complete)
-    sent[#sent + 1] = { kind = kind, payload = { data = data } }
+Pause.CancelTimer = function() end
+Comms.TouchAddonUser = function() end
+local processNextSyncQueue = Comms.ProcessNextSyncQueue
+local function noSyncQueue() end
+local sent
+Comms.SendMessage = function(_, kind, payload, _, target)
+    sent[#sent + 1] = { kind = kind, payload = payload, target = target }
+end
+Comms.SendChunked = function(_, kind, data, target, _, complete)
+    sent[#sent + 1] = { kind = kind, payload = { data = data }, target = target }
     if complete then complete() end
 end
 
@@ -89,6 +96,9 @@ local function reset()
     Data.db.global = {}
     C_TradeSkillUI = nil
     C_SpellBook = nil
+    Enum = nil
+    Pause:OnInitialize()
+    Comms.ProcessNextSyncQueue = noSyncQueue
 end
 
 local tests = {}
@@ -756,6 +766,182 @@ test("clients without GetServerTime stamp with the local clock", function()
     now = serverNow - 1200
     assert(classic:MergeIncoming({ ["Other-Realm"] = entry({ Alchemy = profession(2, 0, serverNow) }, serverNow) }),
         "slow fallback clock refused a server-stamped snapshot")
+end)
+
+-- H19 (#44): a paused DR leaves its sync queue alone until the pause lifts (F29).
+local versionVectorReads = 0
+local readVersionVector = Data.GetVersionVector
+Data.GetVersionVector = function(...)
+    versionVectorReads = versionVectorReads + 1
+    return readVersionVector(...)
+end
+local function pausedDr()
+    Comms:OnInitialize()
+    Comms._prefixRegistered, Comms.RegisterComm = true, function() end
+    Comms:OnEnable()
+    Comms.ProcessNextSyncQueue = processNextSyncQueue
+    Comms.myRole = "DR"
+    playerKey = "Dr-Realm"
+    db = { ["Owner-Realm"] = entry({ Alchemy = profession(5) }, 500) }
+    Data._onlineCache, Data._onlineCacheAt = {}, nil
+    versionVectorReads = 0
+    Pause:OnCombatStart()
+end
+local function request(sender, retry, vector)
+    Comms:HandleSyncRequest({ sender = sender, retry = retry or 0, vector = vector or {} }, sender)
+end
+local function answered(target)
+    for _, message in ipairs(sent) do
+        if message.kind == "SYNC_RESPONSE" and message.target == target then return true end
+    end
+    return false
+end
+local function endCombat()
+    Pause:OnCombatEnd()
+    timers[#timers].fn()
+end
+local function restrictions()
+    Enum = { AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 } }
+    Pause._pausingTypes = { [1] = "Encounter" }
+end
+
+test("a paused DR queues sync requests without building a response", function()
+    pausedDr()
+    request("Alpha-Realm")
+    request("Bravo-Realm")
+    assert(versionVectorReads == 0, "paused DR built " .. versionVectorReads .. " version vector(s)")
+    assert(#sent == 0, "paused DR sent " .. #sent .. " message(s)")
+    assert(#Comms.syncQueue == 2, "queue holds " .. #Comms.syncQueue)
+end)
+
+test("a pause that starts mid-transfer holds the rest of the queue", function()
+    pausedDr()
+    Pause._inCombat = false
+    Comms.syncProcessing = true
+    request("Alpha-Realm")
+    request("Bravo-Realm")
+    Pause:OnCombatStart()
+    -- The in-flight transfer finishes, as SendChunked's onComplete does.
+    Comms.syncProcessing = false
+    Comms:ProcessNextSyncQueue()
+    assert(versionVectorReads == 0, "paused DR drained its queue: " .. versionVectorReads .. " vector(s)")
+    assert(#Comms.syncQueue == 2, "queue holds " .. #Comms.syncQueue)
+end)
+
+test("the queue drains in order once the pause lifts", function()
+    pausedDr()
+    request("Alpha-Realm")
+    request("Bravo-Realm")
+    endCombat()
+    assert(answered("Alpha-Realm") and answered("Bravo-Realm"), "queued requesters not answered")
+    assert(sent[1].target == "Alpha-Realm", "queue order lost")
+    assert(#Comms.syncQueue == 0, "queue holds " .. #Comms.syncQueue)
+end)
+
+test("a lifted restriction drains the queue", function()
+    pausedDr()
+    restrictions()
+    Pause:SetRestrictionState(1, 2)
+    request("Alpha-Realm")
+    endCombat()
+    assert(versionVectorReads == 0, "drained while the restriction was active")
+    Pause:SetRestrictionState(1, 0)
+    assert(answered("Alpha-Realm"), "not answered after the restriction lifted")
+end)
+
+test("a pause lifting mid-transfer waits for that transfer to finish", function()
+    pausedDr()
+    request("Alpha-Realm")
+    Comms.syncProcessing = true
+    endCombat()
+    assert(versionVectorReads == 0, "started a second transfer while one was in flight")
+    Comms.syncProcessing = false
+    Comms:ProcessNextSyncQueue()
+    assert(answered("Alpha-Realm"), "queued requester not answered after the transfer")
+end)
+
+test("resume waits for the last pause condition to clear", function()
+    pausedDr()
+    Pause:OnZoneEnter(nil, false)
+    request("Alpha-Realm")
+    endCombat()
+    assert(versionVectorReads == 0, "drained while still in a zone transition")
+    timers[1].fn()
+    assert(answered("Alpha-Realm"), "not answered after the transition cleared")
+end)
+
+test("a requester who logged off while queued is skipped", function()
+    pausedDr()
+    request("Alpha-Realm")
+    request("Bravo-Realm")
+    now = now + 1
+    Data._onlineCache, Data._onlineCacheAt = { ["Alpha-Realm"] = false }, now
+    endCombat()
+    assert(not answered("Alpha-Realm"), "whispered an offline requester")
+    assert(answered("Bravo-Realm"), "online requester not answered")
+end)
+
+test("a roster snapshot older than the request doesn't drop it", function()
+    pausedDr()
+    Data._onlineCache, Data._onlineCacheAt = { ["Alpha-Realm"] = false }, now
+    now = now + 1
+    request("Alpha-Realm")
+    endCombat()
+    assert(answered("Alpha-Realm"), "dropped a requester who reconnected after the roster read")
+end)
+
+test("a repeat request from a queued peer replaces its entry", function()
+    pausedDr()
+    request("Alpha-Realm", 0, { ["Owner-Realm"] = 100 })
+    request("Bravo-Realm")
+    request("Alpha-Realm", 1, { ["Owner-Realm"] = 500 })
+    assert(#Comms.syncQueue == 2, "queue holds " .. #Comms.syncQueue)
+    assert(Comms.syncQueue[1].requester == "Alpha-Realm", "repeat request moved in the queue")
+    assert(Comms.syncQueue[1].vector["Owner-Realm"] == 500, "kept the older vector")
+end)
+
+test("a DR demoted during the pause answers only what its new role allows", function()
+    pausedDr()
+    request("Alpha-Realm", 0)
+    request("Bravo-Realm", 1)
+    Comms.myRole = "BDR"
+    endCombat()
+    assert(not answered("Alpha-Realm"), "former DR answered a retry=0 request")
+    assert(answered("Bravo-Realm"), "BDR skipped a retry=1 request")
+    assert(#Comms.syncQueue == 0, "queue holds " .. #Comms.syncQueue)
+end)
+
+test("a request older than the requester's sync timeout is dropped", function()
+    pausedDr()
+    request("Alpha-Realm")
+    now = now + 121
+    request("Bravo-Realm")
+    endCombat()
+    assert(not answered("Alpha-Realm"), "answered a request its sender gave up on")
+    assert(answered("Bravo-Realm"), "fresh request not answered")
+end)
+
+test("a queued retry is dropped once its requester stops waiting", function()
+    pausedDr()
+    request("Alpha-Realm", 1)
+    now = now + Comms.SYNC_RETRY_TIMEOUT + 1
+    endCombat()
+    assert(not answered("Alpha-Realm"), "answered a retry its sender gave up on")
+end)
+
+test("a queued first request is kept until the sync timeout", function()
+    pausedDr()
+    request("Alpha-Realm", 0)
+    now = now + Comms.SYNC_TIMEOUT
+    endCombat()
+    assert(answered("Alpha-Realm"), "dropped a first request its sender still waits on")
+end)
+
+test("the queue is bounded", function()
+    pausedDr()
+    for i = 1, Comms.SYNC_QUEUE_MAX + 5 do request("Peer" .. i .. "-Realm") end
+    assert(#Comms.syncQueue == Comms.SYNC_QUEUE_MAX, "queue holds " .. #Comms.syncQueue)
+    assert(Comms.syncQueue[1].requester == "Peer1-Realm", "dropped an earlier requester")
 end)
 
 local failed = 0
