@@ -1,4 +1,4 @@
--- /gc report, debug ring buffer and /gc reset regressions with stubbed WoW APIs.
+-- /gc report, debug ring buffer, /gc reset and addon compartment regressions with stubbed WoW APIs.
 -- Run from the repository root: lua5.1 tools/test-report.lua
 local now = 1000
 local printed = {}
@@ -54,14 +54,26 @@ local addon = {
 }
 LibStub = function(name)
     if name == "AceAddon-3.0" then return { NewAddon = function() return addon end } end
+    if name == "LibDataBroker-1.1" then return { NewDataObject = function(_, _, obj) return obj end } end
+    if name == "LibDBIcon-1.0" then return { Register = function() end } end
     return nil
 end
+
+-- GameTooltip records its owner, lines and visibility for the addon compartment cases.
+GameTooltip = {
+    SetOwner = function(self, owner, anchor) self.owner, self.anchor, self.lines = owner, anchor, {} end,
+    AddLine = function(self, text) self.lines[#self.lines + 1] = text end,
+    Show = function(self) self.shown = true end,
+    Hide = function(self) self.shown = false end,
+}
+local tooltip = GameTooltip
 
 dofile("GuildCrafts/Core.lua")
 dofile("GuildCrafts/Modules/Data.lua")
 dofile("GuildCrafts/Modules/SyncPausePolicy.lua")
 dofile("GuildCrafts/Modules/Comms.lua")
 dofile("GuildCrafts/Modules/Report.lua")
+dofile("GuildCrafts/Modules/MinimapButton.lua")
 local Data, Comms, Pause, Report = GuildCrafts.Data, GuildCrafts.Comms, GuildCrafts.SyncPausePolicy, GuildCrafts.Report
 
 local db
@@ -459,6 +471,33 @@ test("/gc reset says what it cleared and that settings were kept", function()
     has(text, "Cleared all guild members, recipes and sync data")
     has(text, "Kept your settings (minimap button, Online filter, Tooltip crafters) and favorites")
     has(text, "Reloading")
+end)
+
+test("addon compartment globals exist once MinimapButton loads", function()
+    for _, name in ipairs({ "GuildCrafts_OnAddonCompartmentClick", "GuildCrafts_OnAddonCompartmentEnter",
+        "GuildCrafts_OnAddonCompartmentLeave" }) do
+        assert(type(_G[name]) == "function", name .. " is " .. type(_G[name]))
+    end
+end)
+
+test("addon compartment click toggles the main window", function()
+    local toggles = 0
+    GuildCrafts.UI = { Toggle = function() toggles = toggles + 1 end }
+    -- AddonCompartment.lua:103 passes (addonName, buttonName).
+    GuildCrafts_OnAddonCompartmentClick("GuildCrafts", "LeftButton")
+    assert(toggles == 1, "UI:Toggle called " .. toggles .. " times")
+end)
+
+test("addon compartment hover shows the minimap tooltip and leave hides it", function()
+    local button = {}
+    -- AddonCompartment.lua:109, :116 pass (addonName, button).
+    GuildCrafts_OnAddonCompartmentEnter("GuildCrafts", button)
+    assert(tooltip.owner == button, "tooltip not anchored to the compartment button")
+    assert(tooltip.shown, "tooltip not shown")
+    assert(tooltip.lines[1] == "GuildCrafts", "first tooltip line is " .. tostring(tooltip.lines[1]))
+    assert(tooltip.lines[2] and tooltip.lines[2]:find("toggle window", 1, true), "hint line missing")
+    GuildCrafts_OnAddonCompartmentLeave("GuildCrafts", button)
+    assert(not tooltip.shown, "tooltip still shown after leave")
 end)
 
 local failed = 0

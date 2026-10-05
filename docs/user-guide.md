@@ -13,7 +13,8 @@ On first login:
 
 1. Be on a character that's in a guild. Outside a guild, GuildCrafts doesn't sync.
 2. Open each of your profession windows once.
-3. Type `/gc`, or left-click the minimap button, to open the main window.
+3. Type `/gc`, left-click the minimap button, or click GuildCrafts in the addon compartment
+   (the drawer button by the minimap) to open the main window.
 
 About five seconds after each login, GuildCrafts checks your professions. It lists any that
 have no stored recipes yet, so you know which windows to open. Herbalism and Skinning are left
@@ -105,7 +106,8 @@ The buttons along the bottom of the window are toggles:
 - `[Online]` shows only online crafters in counts, member lists and crafter lists. You always
   appear in crafter lists.
 - `[Tooltip]` turns the crafter list in item tooltips on or off.
-- `[Minimap]` shows or hides the minimap button.
+- `[Minimap]` shows or hides the minimap button. GuildCrafts stays in the addon compartment
+  either way.
 
 Forever has no expansion filter buttons.
 

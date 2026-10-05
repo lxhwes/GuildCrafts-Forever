@@ -23,6 +23,10 @@ globals = {
     "SlashCmdList",
     "SLASH_GUILDCRAFTS1",
     "SLASH_GUILDCRAFTS2",
+    -- Addon compartment handlers, named in the Camelot TOC
+    "GuildCrafts_OnAddonCompartmentClick",
+    "GuildCrafts_OnAddonCompartmentEnter",
+    "GuildCrafts_OnAddonCompartmentLeave",
 }
 
 read_globals = {

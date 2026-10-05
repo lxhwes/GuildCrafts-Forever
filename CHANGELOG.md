@@ -15,6 +15,7 @@
   - **Sync pauses under Forever addon restrictions** — outgoing sync also waits while the client reports an Encounter, Challenge Mode, PvP match, Map or Chat restriction. It picks up restrictions already active after a `/reload`. Classic clients are unaffected.
   - **Version shown in `/gc comms`** — the first line now shows the version read from the loaded TOC (`dev` when running from source), so bug reports carry the real build.
   - **Profession list follows the client** — Jewelcrafting and Inscription are hidden whenever the client's own profession skill lines don't include them, even if it reports a later expansion level. The expansion-level check still applies when that list isn't available.
+  - **Icon, category and addon compartment entry** — the addon list now shows GuildCrafts with its book icon under Professions, instead of a question mark with no category. GuildCrafts also appears in the addon compartment, the drawer by the minimap: click it to open or close the main window, and hover it for the same tooltip as the minimap button. Not yet checked in game.
 
   ### Fixes
 

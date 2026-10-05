@@ -25,6 +25,26 @@ local ldb = LibStub("LibDataBroker-1.1"):NewDataObject("GuildCrafts", {
 })
 
 ----------------------------------------------------------------------
+-- Addon compartment (minimap drawer), named by ## AddonCompartmentFunc* in the Camelot TOC
+----------------------------------------------------------------------
+
+-- Called by global name with (addonName, buttonName) (AddonCompartment.lua:99, :103 at e3ecc27).
+function GuildCrafts_OnAddonCompartmentClick()
+    GuildCrafts.UI:Toggle()
+end
+
+-- Called with (addonName, button) (AddonCompartment.lua:106-117 at e3ecc27).
+function GuildCrafts_OnAddonCompartmentEnter(_, button)
+    GameTooltip:SetOwner(button, "ANCHOR_LEFT")
+    ldb.OnTooltipShow(GameTooltip)
+    GameTooltip:Show()
+end
+
+function GuildCrafts_OnAddonCompartmentLeave()
+    GameTooltip:Hide()
+end
+
+----------------------------------------------------------------------
 -- Module Lifecycle
 ----------------------------------------------------------------------
 

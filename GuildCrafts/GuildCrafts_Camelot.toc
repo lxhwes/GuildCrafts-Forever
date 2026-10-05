@@ -5,7 +5,11 @@
 ## Version: @project-version@
 ## SavedVariables: GuildCraftsDB
 ## SavedVariablesPerCharacter: GuildCraftsCharDB
-## X-Category: Guild
+## IconTexture: Interface\Icons\INV_Misc_Book_11
+## Category: Professions
+## AddonCompartmentFunc: GuildCrafts_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: GuildCrafts_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: GuildCrafts_OnAddonCompartmentLeave
 ## X-Curse-Project-ID: 1469206
 
 # Libraries
