@@ -449,6 +449,256 @@ test("Classic is unaffected: no ForeverIdentity, no payload fallback", function(
     assert(ok, err)
 end)
 
+----------------------------------------------------------------------
+-- DR election across several clients (F8, F13, F28)
+-- Each client loads its own Data, ForeverIdentity and Comms. Messages go through
+-- the real SendMessage and OnCommReceived on one simulated GUILD channel, own
+-- GUILD messages echo back as they do in game, and timers run on the shared clock.
+----------------------------------------------------------------------
+local function copy(value)
+    if type(value) ~= "table" then return value end
+    local out = {}
+    for k, v in pairs(value) do out[k] = copy(v) end
+    return out
+end
+
+local activeNode
+IsInInstance = function() return activeNode ~= nil and activeNode.inInstance == true end
+
+local Sim = {}
+Sim.__index = Sim
+
+-- members: { { "Name Surname", guid }, ... }, all online in the roster.
+local function newSim(members)
+    local sim = setmetatable({ nodes = {}, byName = {}, byGuid = {}, queue = {}, wire = {},
+        timers = {}, sends = {}, blocked = {} }, Sim)
+    roster = {}
+    for i, member in ipairs(members) do
+        roster[i] = { member[1], true, member[2] }
+        sim.byGuid[member[2]] = member[1]
+    end
+    now = now + 10
+    return sim
+end
+
+function Sim:who(guid) return guid and (self.byGuid[guid] or guid) or "none" end
+
+function Sim:module(node)
+    local sim = self
+    local function schedule(owner, fn, delay, interval)
+        local handle = { node = node, owner = owner, fn = fn, due = now + delay, interval = interval }
+        sim.timers[#sim.timers + 1] = handle
+        return handle
+    end
+    return {
+        ScheduleTimer = function(owner, fn, delay) return schedule(owner, fn, delay) end,
+        ScheduleRepeatingTimer = function(owner, fn, delay) return schedule(owner, fn, delay, delay) end,
+        CancelTimer = function(_, handle) if handle then handle.cancelled = true end end,
+        RegisterComm = noop,
+    }
+end
+
+function Sim:login(name)
+    local guid
+    for _, row in ipairs(roster) do if row[1] == name then guid = row[3] end end
+    local node = { name = name, guid = guid, online = true, log = {} }
+    local addon = NewAddon()
+    addon.NewModule = function() return self:module(node) end
+    addon.Debug = function(_, ...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        local line = table.concat(parts, " ")
+        if line:find("^Error processing message") then error(name .. ": " .. line) end
+        node.log[#node.log + 1] = line
+    end
+    local saved = GuildCrafts
+    GuildCrafts = addon
+    dofile("GuildCrafts/Modules/Data.lua")
+    dofile("GuildCrafts/Modules/ForeverIdentity.lua")
+    dofile("GuildCrafts/Modules/Comms.lua")
+    GuildCrafts = saved
+    addon.Data.db = { global = {} }
+    addon.Data._playerKey = guid
+    local comms = addon.Comms
+    comms.Serialize = function(_, envelope)
+        self.wire[#self.wire + 1] = copy(envelope)
+        return tostring(#self.wire)
+    end
+    comms.Deserialize = function(_, serialized) return true, copy(self.wire[tonumber(serialized)]) end
+    comms.SendCommMessage = function(_, _, message, distribution, target)
+        local envelope = self.wire[tonumber(message:sub(2))]
+        self.sends[#self.sends + 1] = { from = name, t = envelope.t, term = envelope.term, at = now,
+            distribution = distribution, target = target, p = envelope.p }
+        self.queue[#self.queue + 1] = { from = node, message = message, distribution = distribution,
+            target = target }
+    end
+    node.addon, node.Comms = addon, comms
+    comms:OnInitialize()
+    self.nodes[#self.nodes + 1] = node
+    self.byName[name] = node
+    activeNode = node
+    comms:OnLoginReady()
+    activeNode = nil
+    return node
+end
+
+function Sim:logoff(name)
+    local node = self.byName[name]
+    node.online = false
+    for _, handle in ipairs(self.timers) do
+        if handle.node == node then handle.cancelled = true end
+    end
+end
+
+-- Messages between two clients are lost in both directions, as across an instance boundary.
+function Sim:partition(a, b, on)
+    self.blocked[a .. ">" .. b] = on or nil
+    self.blocked[b .. ">" .. a] = on or nil
+end
+
+function Sim:flush()
+    local delivered = 0
+    while #self.queue > 0 do
+        delivered = delivered + 1
+        assert(delivered < 5000, "message storm")
+        local m = table.remove(self.queue, 1)
+        for _, node in ipairs(self.nodes) do
+            local reaches = node.online and m.from.online
+                and not self.blocked[m.from.name .. ">" .. node.name]
+                and (m.distribution == "GUILD" or node.name == m.target)
+            if reaches then
+                activeNode = node
+                node.Comms:OnCommReceived("GuildCrafts", m.message, m.distribution, m.from.name)
+                activeNode = nil
+            end
+        end
+    end
+end
+
+function Sim:advance(seconds)
+    local target = now + seconds
+    self:flush()
+    while true do
+        local nextTimer
+        for _, handle in ipairs(self.timers) do
+            if not handle.cancelled and handle.due <= target and (not nextTimer or handle.due < nextTimer.due) then
+                nextTimer = handle
+            end
+        end
+        if not nextTimer then break end
+        now = nextTimer.due
+        if nextTimer.interval then nextTimer.due = now + nextTimer.interval else nextTimer.cancelled = true end
+        activeNode = nextTimer.node
+        if type(nextTimer.fn) == "string" then
+            nextTimer.owner[nextTimer.fn](nextTimer.owner)
+        else
+            nextTimer.fn()
+        end
+        activeNode = nil
+        self:flush()
+    end
+    now = target
+    local live = {}
+    for _, handle in ipairs(self.timers) do
+        if not handle.cancelled then live[#live + 1] = handle end
+    end
+    self.timers = live
+end
+
+-- Send a GUILD message from a client as if its own code had.
+function Sim:send(name, msgType, payload)
+    local node = self.byName[name]
+    activeNode = node
+    node.Comms:SendMessage(msgType, payload, "GUILD")
+    activeNode = nil
+    self:flush()
+end
+
+function Sim:lastSend(name, msgType, since)
+    local last
+    for _, s in ipairs(self.sends) do
+        if s.from == name and s.t == msgType and s.at >= (since or 0) then last = s end
+    end
+    return last
+end
+
+-- Every online client (or each of names) names drName as DR, only drName acts as DR,
+-- every client is on the DR's term, and the DR's heartbeat went out and was accepted
+-- within one interval.
+function Sim:assertAgreed(drName, names)
+    local dr = self.byName[drName]
+    local checked
+    if names then
+        checked = {}
+        for _, name in ipairs(names) do checked[name] = true end
+    end
+    assert(dr.online, drName .. " is offline")
+    local beat = self:lastSend(drName, "HEARTBEAT", now - 60)
+    assert(beat, drName .. " sent no HEARTBEAT in the last 60 s")
+    for _, node in ipairs(self.nodes) do
+        if node.online and (not checked or checked[node.name]) then
+            local c = node.Comms
+            assert(c.currentDR == dr.guid, node.name .. " names " .. self:who(c.currentDR) .. " as DR")
+            assert((c.myRole == "DR") == (node == dr), node.name .. " has role " .. c.myRole)
+            assert(c.currentTerm == beat.term, node.name .. " is on term " .. c.currentTerm
+                .. ", the DR's heartbeat carries " .. beat.term)
+            if node ~= dr then
+                assert(now - c.lastDRHeartbeat <= 60, node.name .. " has no DR heartbeat for "
+                    .. (now - c.lastDRHeartbeat) .. " s")
+            end
+        end
+    end
+end
+
+-- GUIDs sort in this order, so the election prefers Ari, then Bel, Cid, Dov.
+local ari, bel, cid, dov = "Player-4619-00000001", "Player-4619-00000002", "Player-4619-00000003",
+    "Player-4619-00000004"
+
+-- name's retry=1 request timed out: run its real retry chain, which evicts its DR and
+-- BDR locally and sends the retry=2 open round.
+local function openRound(sim, name)
+    local node = sim.byName[name]
+    local c = node.Comms
+    c.syncPending, c.syncRetryCount = true, 1
+    c._syncTargetedDR, c._syncTargetedBDR, c._syncLastEffectiveRetry = c.currentDR, c.currentBDR, 1
+    activeNode = node
+    c:OnSyncTimeout()
+    activeNode = nil
+    assert(sim:lastSend(name, "SYNC_REQUEST", now).p.retry == 2, "no open round sent")
+    sim:flush()
+end
+
+-- Log in each name 20 s apart, then let HELLOs, syncs and the first heartbeats settle.
+local function guild(...)
+    local sim = newSim({ { "Ari Ash", ari }, { "Bel Birch", bel }, { "Cid Cedar", cid }, { "Dov Dune", dov } })
+    for i = 1, select("#", ...) do
+        sim:login((select(i, ...)))
+        sim:advance(20)
+    end
+    sim:advance(90)
+    return sim
+end
+
+test("election: clients that log in one by one agree on the lowest GUID", function()
+    local sim = guild("Bel Birch", "Ari Ash", "Cid Cedar")
+    sim:assertAgreed("Ari Ash")
+end)
+
+test("election F8: a DR that adopts a higher term keeps heartbeating", function()
+    local sim = guild("Ari Ash", "Bel Birch")
+    sim:assertAgreed("Ari Ash")
+    -- Ari zones into an instance: neither side hears the other, Bel evicts Ari and takes over.
+    sim.byName["Ari Ash"].inInstance = true
+    sim:partition("Ari Ash", "Bel Birch", true)
+    sim:advance(300)
+    sim:assertAgreed("Bel Birch", { "Bel Birch" })
+    -- Ari zones out. Bel's higher-term heartbeat reaches Ari, which is still the lowest GUID.
+    sim.byName["Ari Ash"].inInstance = false
+    sim:partition("Ari Ash", "Bel Birch", false)
+    sim:advance(130)
+    sim:assertAgreed("Ari Ash")
+end)
+
 local failed = 0
 for _, case in ipairs(tests) do
     reset()

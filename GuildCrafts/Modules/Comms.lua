@@ -1755,12 +1755,14 @@ function Comms:ProcessIncoming(message, distribution, sender)
     -- This corrects a node that missed term increments while inside an instance
     -- (where GUILD addon messages are not delivered). A stale DR will step down
     -- as soon as it receives any message from the updated network.
+    local steppedDown = false
     if type(envelope.term) == "number" and envelope.term > self.currentTerm then
         GuildCrafts:Debug("Higher term", envelope.term, "adopted from", msgType, "by", sender)
         self.currentTerm = envelope.term
         if self.myRole == "DR" then
             GuildCrafts:Debug("Stepping down — higher-term authority arrived via", msgType)
             self:StopHeartbeat()
+            steppedDown = true
             -- Do NOT set myRole or call RecomputeElection here: the sender is not
             -- yet registered in addonUsers. The specific message handler (e.g.
             -- HandleHeartbeat) will register the sender and run RecomputeElection
@@ -1808,6 +1810,15 @@ function Comms:ProcessIncoming(message, distribution, sender)
         self:TouchAddonUser(sender)
     else
         GuildCrafts:Debug("Unknown message type:", msgType, "from", sender)
+    end
+
+    -- Still DR once the sender is known: resume heartbeats on the adopted term (F8).
+    if steppedDown then
+        self:RecomputeElection()
+        if self.myRole == "DR" and not self.heartbeatTimer then
+            GuildCrafts:Debug("Still DR on term", self.currentTerm, "— resuming heartbeats")
+            self:StartHeartbeat()
+        end
     end
 
     -- Remember a key that only the fallback put in addonUsers, so a revocation can undo it.
