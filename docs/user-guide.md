@@ -75,6 +75,8 @@ The right panel lists every recipe in the profession that any GuildCrafts user k
 - `[W]` opens a whisper to a crafter. With more than one crafter, it shows a list to pick from.
   It hasn't been checked in game yet (see [Known limitations](#known-limitations)).
 - `[G]` posts the crafter list to guild chat. Each recipe can be posted once every 30 seconds.
+  If the client has no send API or raises an error, GuildCrafts says so in your chat window
+  and `/gc report` logs the reason.
 
 Herbalism and Skinning don't have a Recipes view. See [Profession coverage](#profession-coverage).
 
@@ -133,7 +135,13 @@ installed.
 - You can shift-click an item link into the query.
 - If the name finds nothing and the query has four or more letters, it tries again ignoring
   vowels, which catches some typos.
-- Once a query has been answered, the same query isn't answered again for 30 seconds.
+- If nothing matches, the reply says no guild crafter was found. Replies never repeat the
+  query text.
+- Once a query has been answered, found or not, the same query isn't answered again for 30
+  seconds.
+- If a reply can't be sent (no send API, or the client raises an error), that GuildCrafts user
+  doesn't tell the others it answered, so the next one in line can still reply. `/gc report`
+  logs the failure.
 
 The reply hasn't been confirmed on Forever yet (H14).
 
@@ -192,8 +200,9 @@ These are open in the current beta build. Each has a plan ID.
 - The `[W]` whisper button and shift-click links use Forever's chat API, and `[W]` sets the
   two-word name as the whisper target directly. Neither has been checked in game yet (F20, F25;
   H14).
-- `!gc` replies and `[G]` both send guild chat with `SendChatMessage`. Whether Forever allows
-  that from an addon hasn't been checked yet (H14).
+- `!gc` replies and `[G]` both send guild chat with `C_ChatInfo.SendChatMessage`, or the older
+  `SendChatMessage` global if that's missing. Forever marks the function as restricted, and an
+  addon post through it hasn't been checked in game yet (H14).
 - Outgoing sync pauses during combat (plus 6 seconds), inside instances (plus 15 seconds after
   leaving), for 12 seconds after a zone change, and while Forever reports an Encounter,
   Challenge Mode, PvP match, Map or Chat restriction. A new recipe scanned during a pause isn't

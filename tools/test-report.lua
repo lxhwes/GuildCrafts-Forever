@@ -242,6 +242,140 @@ test("report ends with the debug log", function()
     assert(text:find("last words", 1, true) > text:find("Debug log", 1, true), "log not after its heading")
 end)
 
+----------------------------------------------------------------------
+-- !gc and [G] guild chat sends (H14: send API, F4, F24)
+----------------------------------------------------------------------
+
+local chatSent, chatTimers, chatAcks
+local CRAFTERS = { { key = "Player-1-AA" } }
+
+local function sendTo(api)
+    return function(text, chatType)
+        chatSent[#chatSent + 1] = { api = api, text = text, chatType = chatType }
+    end
+end
+
+-- Each case gets fresh send stubs and timers; everything it swaps is put back.
+local function chatTest(name, fn)
+    test(name, function()
+        local saved = {
+            cSend = C_ChatInfo.SendChatMessage, gSend = SendChatMessage, inInstance = IsInInstance,
+            search = Data.SearchRecipes, searchKey = Data.SearchRecipesByKey, online = Data.IsMemberOnline,
+            ack = Comms.BroadcastGcAck,
+        }
+        chatSent, chatTimers, chatAcks = {}, {}, {}
+        C_ChatInfo.SendChatMessage = sendTo("C_ChatInfo")
+        SendChatMessage = sendTo("global")
+        IsInInstance = function() return false end
+        GuildCrafts.ScheduleTimer = function(_, f, delay) chatTimers[#chatTimers + 1] = { f = f, delay = delay } end
+        Comms.BroadcastGcAck = function() chatAcks[#chatAcks + 1] = #chatSent end
+        Data.SearchRecipes = function() return {} end
+        Data.SearchRecipesByKey = function() return {} end
+        Data.IsMemberOnline = function() return false end
+        Comms.myRole = "DR"
+        Comms.addonUsers = { [me] = { lastSeen = now }, ["Player-1-AA"] = { lastSeen = now } }
+        GuildCrafts._chatPostCooldowns = {}
+        GuildCrafts._gcQueryCooldowns = nil
+        GuildCrafts._gcLastGuildCraftsMsg, GuildCrafts._gcLastAddonAck = 0, 0
+
+        local ok, err = pcall(fn)
+
+        C_ChatInfo.SendChatMessage, SendChatMessage, IsInInstance = saved.cSend, saved.gSend, saved.inInstance
+        Data.SearchRecipes, Data.SearchRecipesByKey, Data.IsMemberOnline = saved.search, saved.searchKey, saved.online
+        Comms.BroadcastGcAck = saved.ack
+        GuildCrafts.ScheduleTimer = nil
+        if not ok then error(err, 0) end
+    end)
+end
+
+-- Ask in guild chat and fire the responder's timer, as the DR would.
+local function ask(msg)
+    local before = #chatTimers
+    GuildCrafts:OnGuildChatMessage("CHAT_MSG_GUILD", msg)
+    if #chatTimers == before then return false end
+    chatTimers[#chatTimers].f()
+    return true
+end
+
+local function logText() return table.concat(Report:GetLogLines(), "\n") end
+
+chatTest("[G] posts through C_ChatInfo.SendChatMessage when it exists", function()
+    GuildCrafts:PostCraftersToGuildChat("Flask of Petrification", 13506, CRAFTERS)
+    assert(#chatSent == 1, "sent " .. #chatSent .. " line(s)")
+    assert(chatSent[1].api == "C_ChatInfo", "sent through " .. chatSent[1].api)
+    assert(chatSent[1].chatType == "GUILD", "chat type " .. tostring(chatSent[1].chatType))
+    has(chatSent[1].text, "[GuildCrafts] Flask of Petrification: Motiv Hysteria")
+end)
+
+chatTest("[G] falls back to the global SendChatMessage", function()
+    C_ChatInfo.SendChatMessage = nil
+    GuildCrafts:PostCraftersToGuildChat("Flask of Petrification", 13506, CRAFTERS)
+    assert(#chatSent == 1 and chatSent[1].api == "global", "fallback not used")
+end)
+
+chatTest("[G] with no send API prints a message, logs it and keeps no cooldown", function()
+    C_ChatInfo.SendChatMessage, SendChatMessage = nil, nil
+    GuildCrafts:PostCraftersToGuildChat("Flask of Petrification", 13506, CRAFTERS)
+    assert(#printed == 1, "printed " .. #printed .. " line(s)")
+    has(printed[1], "Couldn't post")
+    has(logText(), "Guild chat send failed")
+    assert(GuildCrafts._chatPostCooldowns[13506] == nil, "cooldown stamped on a failed post")
+end)
+
+chatTest("[G] counts a send that raises as failed", function()
+    C_ChatInfo.SendChatMessage = function() error("blocked") end
+    GuildCrafts:PostCraftersToGuildChat("Flask of Petrification", 13506, CRAFTERS)
+    has(printed[1] or "", "Couldn't post")
+    has(logText(), "blocked")
+end)
+
+chatTest("!gc miss never echoes the asker's text", function()
+    assert(ask("!gc |cffff0000Buy gold at evil.example|r"), "no reply scheduled")
+    assert(#chatSent == 1, "sent " .. #chatSent .. " line(s)")
+    assert(chatSent[1].api == "C_ChatInfo", "sent through " .. chatSent[1].api)
+    assert(not chatSent[1].text:lower():find("evil", 1, true), "asker text echoed: " .. chatSent[1].text)
+    has(chatSent[1].text, "[GuildCrafts] No guild crafter found")
+end)
+
+chatTest("!gc miss starts the cooldown", function()
+    assert(ask("!gc nosuchrecipe"), "no reply scheduled")
+    assert(not ask("!gc nosuchrecipe"), "repeat miss answered inside the cooldown")
+    assert(#chatSent == 1, "sent " .. #chatSent .. " line(s)")
+    now = now + 31
+    assert(ask("!gc nosuchrecipe"), "miss not answered after the cooldown")
+end)
+
+chatTest("!gc hit posts DB names, then sends GC_ACK", function()
+    Data.SearchRecipes = function()
+        return { { recipeName = "Flask of Petrification", profName = "Alchemy", crafters = CRAFTERS } }
+    end
+    assert(ask("!gc flask of petrification and spam"), "no reply scheduled")
+    assert(#chatSent == 1, "sent " .. #chatSent .. " line(s)")
+    has(chatSent[1].text, "[GuildCrafts] Flask of Petrification (Alchemy): Motiv Hysteria")
+    assert(not chatSent[1].text:find("spam", 1, true), "asker text echoed: " .. chatSent[1].text)
+    assert(#chatAcks == 1, "sent " .. #chatAcks .. " ACK(s)")
+    assert(chatAcks[1] == 1, "ACK went out before the post")
+end)
+
+chatTest("!gc failed post sends no GC_ACK and no cooldown", function()
+    C_ChatInfo.SendChatMessage = function() error("restricted") end
+    SendChatMessage = nil
+    assert(ask("!gc nosuchrecipe"), "no reply scheduled")
+    assert(#chatAcks == 0, "ACK sent for a failed post")
+    has(logText(), "restricted")
+    assert(ask("!gc nosuchrecipe"), "failed post started the cooldown")
+end)
+
+chatTest("!gc with no send API doesn't raise and sends no GC_ACK", function()
+    C_ChatInfo.SendChatMessage, SendChatMessage = nil, nil
+    Data.SearchRecipes = function()
+        return { { recipeName = "Flask of Petrification", profName = "Alchemy", crafters = CRAFTERS } }
+    end
+    assert(ask("!gc flask of petrification"), "no reply scheduled")
+    assert(#chatAcks == 0, "ACK sent with no send API")
+    has(logText(), "Guild chat send failed")
+end)
+
 test("/gc report opens a copy box holding the report", function()
     GuildCrafts:SlashHandler("report")
     local edit
