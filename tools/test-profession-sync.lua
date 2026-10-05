@@ -85,6 +85,7 @@ local function reset()
     debugs, timers = {}, {}
     Data.db.global = {}
     C_TradeSkillUI = nil
+    C_SpellBook = nil
 end
 
 local tests = {}
@@ -596,6 +597,62 @@ test("a successful scan resets the retry budget", function()
     ready = true
     table.remove(timers, 1).fn()
     assert(#timers == 0 and (Data._scanRetries or 0) == 0, "retry budget not reset")
+end)
+
+-- H15 (#18), F12: Forever recipes have categoryID but no categoryName (CATR, 2026-10-04).
+test("a Forever recipe stores the category heading GetCategoryInfo names", function()
+    local categories = { [2450] = { name = "Elixirs", parentCategoryID = 2424 } }
+    tradeSkill({
+        GetCategoryInfo = function(id) return categories[id] end,
+        GetRecipeInfo = function(id)
+            local info = { learned = true, name = "Recipe " .. id, categoryID = 2450 }
+            if id == 202 then info.categoryName = "Flasks" end
+            return info
+        end,
+    })
+    -- Reagents already complete from an earlier scan: the category is still backfilled.
+    Data:SetRecipeInfo(-201, "Recipe 201", nil, { { name = "Herb", count = 1 } })
+    Data:ScanTradeSkillModern()
+    assert(Data:GetRecipeCategory(-201) == "Elixirs", "category: " .. tostring(Data:GetRecipeCategory(-201)))
+    assert(Data:GetRecipeCategory(-203) == "Elixirs", "recipe without reagents has no category")
+    assert(Data:GetRecipeCategory(-202) == "Flasks", "categoryName did not win where the client has it")
+    C_TradeSkillUI.GetCategoryInfo = nil
+    Data.db.global = {}
+    Data:ScanTradeSkillModern()
+    assert(Data:GetRecipeCategory(-201) == nil, "a client without GetCategoryInfo stored a category")
+end)
+
+-- H15 (#18), F16: C_SpellBook.IsSpellKnown is preferred over the global.
+test("specialisation detection asks C_SpellBook first", function()
+    C_SpellBook = { IsSpellKnown = function(id) return id == 28677 end }
+    db[playerKey] = entry({ Alchemy = profession(1) }, 800)
+    local ok, err = pcall(function() Data:DetectSpecialisations() end)
+    C_SpellBook = nil
+    assert(ok, err)
+    assert(db[playerKey].professions.Alchemy.specialisation == "Elixir Master",
+        "spec: " .. tostring(db[playerKey].professions.Alchemy.specialisation))
+end)
+
+-- H15 (#18), F21: an empty profession name is "not ready", not "not tracked".
+test("an empty profession name falls back to the recipe, then retries", function()
+    local byRecipe = "Alchemy"
+    tradeSkill({
+        GetBaseProfessionInfo = function()
+            return { professionName = "", skillLevel = 1, maxSkillLevel = 75 }
+        end,
+        GetProfessionInfoByRecipeID = function(id)
+            assert(id == 201, "looked up recipe " .. tostring(id))
+            return { professionName = byRecipe }
+        end,
+    })
+    assert(Data:ScanTradeSkillModern(), "fallback name not used")
+    assert(count(db[playerKey].professions.Alchemy) == 2, "recipes not stored under the fallback name")
+    db, debugs = {}, {}
+    byRecipe = ""
+    Data:ScanTradeSkillModern()
+    assert(not logged("not tracked"), "empty name logged as not tracked")
+    assert(#timers == 1, "empty name did not retry")
+    assert(logged("no profession name"), "retry reason missing: " .. table.concat(debugs, " | "))
 end)
 
 local failed = 0

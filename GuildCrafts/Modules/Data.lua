@@ -57,12 +57,17 @@ end
 -- Mainline-API clients (Forever) removed the GetItemInfo global; C_Item returns the same values.
 local GetItemInfo = (C_Item and C_Item.GetItemInfo) or GetItemInfo
 
--- IsSpellKnown moved to C_SpellBook on Mainline-API clients.
+-- IsSpellKnown moved to C_SpellBook on Mainline-API clients; ask it first where it exists.
 local function IsSpellKnownCompat(spellID)
-    if IsSpellKnown then return IsSpellKnown(spellID) end
     if C_SpellBook and C_SpellBook.IsSpellKnown then return C_SpellBook.IsSpellKnown(spellID) end
+    if IsSpellKnown then return IsSpellKnown(spellID) end
     if IsPlayerSpell then return IsPlayerSpell(spellID) end
     return false
+end
+
+-- "" is truthy in Lua, so an unfilled client string would stop an `or` fallback chain.
+local function NonEmpty(s)
+    if s ~= "" then return s end
 end
 
 -- Whether the client can list skill lines at all. Forever can't (SKL probe, 2026-10-02).
@@ -1617,6 +1622,16 @@ local function GetRecipeReagentList(recipeID, schematic)
     return reagents
 end
 
+-- Forever's recipe info has categoryID but no categoryName (CATR probe, 2026-10-04). The
+-- recipe's own category is the heading Blizzard's list shows, so no walk up the parents.
+local function GetRecipeCategoryName(info)
+    if NonEmpty(info.categoryName) then return info.categoryName end
+    if info.categoryID and C_TradeSkillUI.GetCategoryInfo then
+        local category = C_TradeSkillUI.GetCategoryInfo(info.categoryID)
+        return category and NonEmpty(category.name)
+    end
+end
+
 -- Consecutive scan retries before giving up. Each event-triggered scan starts a
 -- fresh budget, so a stuck read can't loop (or flood the debug log) forever.
 local SCAN_RETRY_LIMIT = 10
@@ -1673,9 +1688,16 @@ function Data:ScanTradeSkillModern(isRetry)
         GuildCrafts:Debug("ScanTradeSkillModern: GetBaseProfessionInfo() returned nil")
         return
     end
-    local profDisplayName = profInfo.professionName or profInfo.parentProfessionName or profInfo.name
+    local profDisplayName = NonEmpty(profInfo.professionName) or NonEmpty(profInfo.parentProfessionName)
+        or NonEmpty(profInfo.name)
+    -- An empty name means the window isn't filled in yet; ask via a recipe in the list.
+    if not profDisplayName and C_TradeSkillUI.GetProfessionInfoByRecipeID then
+        local ids = C_TradeSkillUI.GetAllRecipeIDs()
+        local byRecipe = ids and ids[1] and C_TradeSkillUI.GetProfessionInfoByRecipeID(ids[1])
+        profDisplayName = byRecipe and NonEmpty(byRecipe.professionName)
+    end
     if not profDisplayName then
-        GuildCrafts:Debug("ScanTradeSkillModern: no professionName in profInfo, keys:", table.concat((function()
+        self:RetryModernScan(1, "no profession name yet, profInfo keys: " .. table.concat((function()
             local k = {}; for key in pairs(profInfo) do k[#k+1] = tostring(key) end; return k
         end)(), ", "))
         return
@@ -1742,13 +1764,15 @@ function Data:ScanTradeSkillModern(isRetry)
             local key = GetRecipeOutputItemID(recipeID, schematic) or -recipeID
 
             if key then
-                -- Scan reagents into shared RecipeDB
+                -- Scan reagents and category into shared RecipeDB. The category is stored on
+                -- its own so recipes whose reagents are already complete still get one.
                 local reagents = GetRecipeReagentList(recipeID, schematic)
-                if #reagents > 0 then
-                    local existingReagents = self:GetRecipeReagents(key)
-                    if not existingReagents or #existingReagents < #reagents then
-                        self:SetRecipeInfo(key, info.name, info.categoryName, reagents)
-                    end
+                local existingReagents = self:GetRecipeReagents(key)
+                local newReagents = #reagents > 0
+                    and (not existingReagents or #existingReagents < #reagents)
+                local category = GetRecipeCategoryName(info)
+                if newReagents or (category and category ~= self:GetRecipeCategory(key)) then
+                    self:SetRecipeInfo(key, info.name, category, newReagents and reagents or nil)
                 end
 
                 if not recipes[key] then
