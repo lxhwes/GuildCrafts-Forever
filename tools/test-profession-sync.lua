@@ -46,7 +46,6 @@ GuildCrafts = {
 dofile("GuildCrafts/Modules/Data.lua")
 dofile("GuildCrafts/Modules/Comms.lua")
 local Data, Comms = GuildCrafts.Data, GuildCrafts.Comms
-local realGetGuildDB = Data.GetGuildDB
 Data.GetGuildDB = function() return db end
 Data.GetPlayerKey = function() return playerKey end
 Data.GetGuildKey = function() return nil end
@@ -692,45 +691,51 @@ test("a drop from a client 20 minutes fast loses to a later relearn", function()
     assert(alchemy and count(alchemy) == 2, "the fast clock's drop beat the relearn")
 end)
 
-test("stamps far ahead of server time are clamped, so a later snapshot wins", function()
+test("far-future stamps are refused, so a correctly stamped snapshot still wins", function()
     playerKey = "Peer-Realm"
     local future = serverNow + 365 * 86400
-    Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(3, 0, future) }, future, { Cooking = future }) })
+    db["Owner-Realm"] = entry({ Alchemy = profession(3, 0, 900), Tailoring = profession(2, 0, 900) }, 900)
+    assert(not Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(1, 0, future) }, future) }),
+        "future snapshot accepted")
+    assert(not Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(3, 0, 950) }, 950, { Cooking = future }) }),
+        "snapshot with a future drop accepted")
     Comms:HandleDeltaUpdate({ type = "touch", member = "Owner-Realm",
         profession = "Alchemy", lastUpdate = future }, "Owner-Realm")
-    Data:MergeDelta("Owner-Realm", "Alchemy", 9, { name = "Future" }, future, future)
+    Data:MergeDelta("Owner-Realm", "Alchemy", 9, { name = "Future" }, future, 0)
     Data:MergeProfessionRemoval("Owner-Realm", "Tailoring", future)
-    Data:MergeIncoming({ ["Gone-Realm"] = { _tombstone = true, lastUpdate = future } })
-    local stored, ceiling = db["Owner-Realm"], serverNow + 300
-    assert(stored.lastUpdate <= ceiling, "member revision not clamped: " .. stored.lastUpdate)
-    assert(stored.professions.Alchemy.lastUpdate <= ceiling, "profession revision not clamped")
-    assert(stored.dropped.Cooking <= ceiling and stored.dropped.Tailoring <= ceiling, "drop not clamped")
-    assert(db["Gone-Realm"].lastUpdate <= ceiling, "tombstone not clamped")
-    -- Once the tolerance has passed, a correctly stamped snapshot replaces it.
-    serverNow = serverNow + 600
+    assert(not Data:MergeIncoming({ ["Gone-Realm"] = { _tombstone = true, lastUpdate = future } }),
+        "future tombstone accepted")
+    local stored = db["Owner-Realm"]
+    assert(stored.lastUpdate == 900 and stored.professions.Alchemy.lastUpdate == 900, "future stamp stored")
+    assert(not stored.professions.Alchemy.recipes[9], "future delta stored")
+    assert(stored.professions.Tailoring and not stored.dropped, "future removal applied")
     assert(Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(4, 100, serverNow) }, serverNow) }),
-        "broken clock still wins")
-    assert(Data:MergeIncoming({ ["Gone-Realm"] = entry({ Alchemy = profession(2, 0, serverNow) }, serverNow) }),
-        "future tombstone still blocks a rejoin")
+        "correct snapshot lost to a broken clock")
 end)
 
-test("future stamps already in SavedVariables are clamped on first load", function()
-    local future = serverNow + 86400
-    Data.db.global = { G = {
-        [playerKey] = entry({ Alchemy = profession(3, 0, future) }, future, { Cooking = future }),
-        ["Gone-Realm"] = { _tombstone = true, lastUpdate = future },
-    } }
-    local originalKey = Data.GetGuildKey
-    Data.GetGuildKey = function() return "G" end
-    Data._guildMigrated, Data._memberKeysNormalized, Data._stampsClamped = true, true, nil
-    local ok, gdb = pcall(realGetGuildDB, Data)
-    Data.GetGuildKey = originalKey
-    Data._guildMigrated, Data._memberKeysNormalized, Data._stampsClamped = nil, nil, nil
-    assert(ok, gdb)
-    local own, ceiling = gdb[playerKey], serverNow + 300
-    assert(own.lastUpdate <= ceiling and own.professions.Alchemy.lastUpdate <= ceiling, "own revision not clamped")
-    assert(own.dropped.Cooking <= ceiling, "own drop not clamped")
-    assert(gdb["Gone-Realm"].lastUpdate <= ceiling, "stored tombstone not clamped")
+test("stamps within the tolerance are accepted unchanged and keep their order", function()
+    playerKey = "Peer-Realm"
+    db["Owner-Realm"] = entry({ Alchemy = profession(3, 0, 900) }, 900)
+    local function removal() Data:MergeProfessionRemoval("Owner-Realm", "Alchemy", 2200) end
+    local function relearn() Data:MergeDelta("Owner-Realm", "Alchemy", 500, { name = "New" }, 2201, 2200) end
+    removal(); relearn()
+    assert(count(db["Owner-Realm"].professions.Alchemy) == 3, "applied while far ahead")
+    serverNow = 1950
+    removal(); relearn()
+    local stored = db["Owner-Realm"]
+    assert(stored.dropped.Alchemy == 2200 and stored.lastUpdate == 2201, "stamps rewritten")
+    assert(count(stored.professions.Alchemy) == 1 and stored.professions.Alchemy.recipes[500],
+        "relearn collapsed onto its drop")
+end)
+
+test("a delayed older snapshot cannot undo a newer drop already saved", function()
+    -- Saved before H2 by a fast clock; left as is, so its order against older copies holds.
+    playerKey = "Peer-Realm"
+    db["Owner-Realm"] = entry({}, 100003, { Alchemy = 100003 })
+    serverNow = 1001
+    Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(5) }, 100001, { Alchemy = 100000 }) })
+    assert(not db["Owner-Realm"].professions.Alchemy, "pre-drop recipes restored")
+    assert(db["Owner-Realm"].dropped.Alchemy == 100003, "saved drop rewritten")
 end)
 
 test("clients without GetServerTime stamp with the local clock", function()

@@ -1172,14 +1172,13 @@ function Comms:HandleDeltaUpdate(payload, sender)
         -- subsequent resurrection.
         local gdb = GuildCrafts.Data:GetGuildDB()
         local entry = gdb and gdb[memberKey]
-        local stamp = GuildCrafts.Data:ClampStamp(payload.lastUpdate)
-        if entry and not entry._tombstone then
+        if entry and not entry._tombstone and not GuildCrafts.Data:IsFutureStamp(payload.lastUpdate) then
             local profData = payload.profession and entry.professions[payload.profession]
             if profData then
-                profData.lastUpdate = math.max(stamp,
+                profData.lastUpdate = math.max(payload.lastUpdate,
                     profData.lastUpdate or entry.lastUpdate or 0)
             end
-            entry.lastUpdate = math.max(stamp, entry.lastUpdate or 0)
+            entry.lastUpdate = math.max(payload.lastUpdate, entry.lastUpdate or 0)
         end
         GuildCrafts:Debug("DELTA_UPDATE (touch) from", sender, "for", memberKey)
         -- No recipe data changed; skip UI refresh.

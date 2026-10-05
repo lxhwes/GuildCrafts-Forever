@@ -105,8 +105,7 @@ local STALE_DISPLAY_THRESHOLD   = 30 * 24 * 3600  -- show [Nd ago] tag; CountSta
 local EX_GUILD_GRACE_PERIOD     =  7 * 24 * 3600  -- prune ex-members after 7 days absent
 local INACTIVE_MEMBER_THRESHOLD = 45 * 24 * 3600  -- prune still-in-guild members with no scan in 45 days
 local TOUCH_BROADCAST_THRESHOLD = 25 * 24 * 3600  -- broadcast timestamp touch only when data is 25+ days old
--- Covers same-second revision bumps and an unsynced PC clock on the time() fallback,
--- while capping how long a broken clock's stamps can beat correct ones.
+-- Covers same-second revision bumps and an unsynced PC clock on the time() fallback.
 local MAX_CLOCK_AHEAD           = 300
 
 ----------------------------------------------------------------------
@@ -119,49 +118,25 @@ local function Now()
     return GetServerTime and GetServerTime() or time()
 end
 
-local function ClampStamp(stamp)
-    local ceiling = Now() + MAX_CLOCK_AHEAD
-    if type(stamp) == "number" and stamp > ceiling then return ceiling end
-    return stamp
+-- Far-future stamps come from a broken clock. They're refused, not clamped:
+-- clamping rewrites each revision by arrival time, which reorders them.
+local function IsFutureStamp(stamp)
+    return type(stamp) == "number" and stamp > Now() + MAX_CLOCK_AHEAD
 end
 
--- Returns true if any stamp in the member entry was pulled back.
-local function ClampEntryStamps(entry)
-    local changed = false
-    local function clamp(stamp)
-        local clamped = ClampStamp(stamp)
-        if clamped ~= stamp then changed = true end
-        return clamped
+local function HasFutureStamp(entry)
+    if IsFutureStamp(entry.lastUpdate) then return true end
+    for _, revision in pairs(type(entry.dropped) == "table" and entry.dropped or {}) do
+        if IsFutureStamp(revision) then return true end
     end
-    entry.lastUpdate = clamp(entry.lastUpdate)
-    if type(entry.dropped) == "table" then
-        for profName, revision in pairs(entry.dropped) do
-            entry.dropped[profName] = clamp(revision)
-        end
+    for _, profData in pairs(type(entry.professions) == "table" and entry.professions or {}) do
+        if type(profData) == "table" and IsFutureStamp(profData.lastUpdate) then return true end
     end
-    if type(entry.professions) == "table" then
-        for _, profData in pairs(entry.professions) do
-            if type(profData) == "table" then profData.lastUpdate = clamp(profData.lastUpdate) end
-        end
-    end
-    return changed
+    return false
 end
 
 function Data:Now() return Now() end
-function Data:ClampStamp(stamp) return ClampStamp(stamp) end
-
---- Pull back stamps a fast local clock wrote before H2. Runs once per load.
-function Data:ClampStoredStamps(gdb)
-    local clamped = 0
-    for _, entry in pairs(gdb or {}) do
-        if type(entry) == "table" and entry.lastUpdate and ClampEntryStamps(entry) then
-            clamped = clamped + 1
-        end
-    end
-    if clamped > 0 then
-        GuildCrafts:Debug("Clamped future revisions on", clamped, "member entr(ies)")
-    end
-end
+function Data:IsFutureStamp(stamp) return IsFutureStamp(stamp) end
 
 -- Crafting professions we track (canonical English keys)
 local TRACKED_PROFESSIONS = {
@@ -598,10 +573,6 @@ function Data:GetGuildDB()
     if not self._memberKeysNormalized then
         self:MergeRealmlessKeys(self.db.global[guildKey])
         self._memberKeysNormalized = true
-    end
-    if not self._stampsClamped then
-        self:ClampStoredStamps(self.db.global[guildKey])
-        self._stampsClamped = true
     end
 
     return self.db.global[guildKey]
@@ -2047,8 +2018,9 @@ function Data:MergeIncoming(incomingData)
     local changed = false
     local playerKey = self:GetPlayerKey()
     for rawMemberKey, incomingEntry in pairs(incomingData) do
-        if type(incomingEntry) == "table" and incomingEntry.lastUpdate then
-            ClampEntryStamps(incomingEntry)
+        if type(incomingEntry) == "table" and incomingEntry.lastUpdate and HasFutureStamp(incomingEntry) then
+            GuildCrafts:Debug("MergeIncoming: refused future-stamped entry for", rawMemberKey)
+        elseif type(incomingEntry) == "table" and incomingEntry.lastUpdate then
             local memberKey = self:NormalizeMemberKey(rawMemberKey) or rawMemberKey
             -- Never overwrite our own data — we're always authoritative
             -- for ourselves (local scans have reagents/cooldowns that
@@ -2197,7 +2169,10 @@ function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpda
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
     if not memberKey then return end
-    newLastUpdate, dropRevision = ClampStamp(newLastUpdate), ClampStamp(dropRevision)
+    if IsFutureStamp(newLastUpdate) or IsFutureStamp(dropRevision) then
+        GuildCrafts:Debug("MergeDelta: refused future-stamped delta for", memberKey, profName)
+        return
+    end
 
     -- Reject delta if we have a tombstone that is at least as new.
     -- If the delta is strictly newer, the member re-joined and re-scanned —
@@ -2255,7 +2230,10 @@ function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate)
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
     if not memberKey then return end
-    newLastUpdate = ClampStamp(newLastUpdate)
+    if IsFutureStamp(newLastUpdate) then
+        GuildCrafts:Debug("MergeProfessionRemoval: refused future-stamped removal for", memberKey, profName)
+        return
+    end
     local entry = self:GetMemberEntry(memberKey, false)
     -- Tombstone entries have no professions; removal is a no-op for them.
     if entry and entry._tombstone then
