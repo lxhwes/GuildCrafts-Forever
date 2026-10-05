@@ -422,6 +422,20 @@ On GitHub on 2026-10-03, `workflow_dispatch` with `publish=false` (run `37093088
   to the vetted v32 `3491b6c9…6dde8`.
 - No real CurseForge upload has been made yet.
 
+On GitHub on 2026-10-05, H20's release notes (#80): `workflow_dispatch` from branch
+`fix/changelog-upload` with `publish=false` (run `37258855152`, `bf2b8a6`):
+- The notes step logged `release-notes: wrote '## Unreleased' (27 lines) to .release-notes.md
+  for refs/heads/fix/changelog-upload`. The packager logged `Using manual changelog
+  .release-notes.md`. The gate printed `forever-gate: OK (Game version: 1.60.1;
+  GuildCrafts-bf2b8a6-forever.zip; CTL v32)` and publish was skipped.
+- The `release-notes` artifact held one `## ` heading, `## Unreleased`. Its 27 lines match
+  `CHANGELOG.md` lines 5–31 with the two-space indent removed. Nothing from `## 2.0.2` down
+  is in it.
+- The zip has no `.release-notes.md`. It still holds `GuildCrafts/CHANGELOG.md`, 43,907 bytes,
+  with the full history. The client doesn't load it, so it stays.
+- The zip also holds `GuildCrafts/AGENTS.md`, added in #75 after run `37093088953` and not in
+  `.pkgmeta` `ignore`. Not changed here.
+
 ### Release procedure
 
 The draft-upload plan that was here moved to `docs/releasing.md` on 2026-10-03. Its alpha-tag

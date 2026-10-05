@@ -8,8 +8,8 @@ upstream author's permission (`docs/ORIGIN.md`). CurseForge project 1469206 is s
 upstream, so a file tagged for a Classic flavor would land next to upstream's own files.
 Never upload a zip made by hand, because `GuildCrafts/` holds all six TOCs.
 
-The newest dry run is PR #77's, run `37218988581` on 2026-10-04, which passed. It packaged
-the branch commit `8f9b3cc`, not a commit to be tagged. The last dry run of `main`, with its
+The newest dry run is H20's, run `37258855152` on 2026-10-05, which passed. It packaged
+the branch commit `bf2b8a6`, not a commit to be tagged. The last dry run of `main`, with its
 artifact inspected, is run `37093088953` on 2026-10-03, which packaged `8f0dc69`. No real
 CurseForge upload has been made yet. Dated packaging experiments are in
 `spec/migration-forever.md` under "Packaging".
@@ -29,6 +29,9 @@ CurseForge upload has been made yet. Dated packaging experiments are in
   the secret is set, never its value. `tools/test-release-preflight.sh` covers each refusal and
   runs in CI.
 
+Every run then writes this version's release notes (see "Release notes" below). A tag build
+whose version has no `CHANGELOG.md` section fails there.
+
 The `package` job then runs in this order. Steps 1 to 3 each fail the job before anything
 uploads.
 
@@ -47,7 +50,8 @@ uploads.
    - the zipped ChatThrottleLib is v32 or later.
 
    On success it prints `forever-gate: OK (Game version: …; <zip>; CTL v<n>)`.
-4. The zip is uploaded as the run artifact `guildcrafts-forever`, on every run.
+4. The zip is uploaded as the run artifact `guildcrafts-forever`, and the release notes as
+   `release-notes`, on every run.
 5. The publish step runs only for a tag push, or a manual run with `publish` set. It re-runs
    the packager with `-c -o -g forever`. `-c` skips copying files and `-o` keeps the folder the
    gate checked, so the uploaded zip is rebuilt from exactly that folder. `CF_API_KEY` and
@@ -57,6 +61,31 @@ The checks inside the publish step run after the upload. They flag a bad upload:
 CurseForge upload, a non-Forever version in an `Uploading …` line, or no `Success!`. They can't
 undo it. Everything that can be checked beforehand is: the token and the tag by the preflight,
 and the package by the gate in step 3.
+
+### Release notes
+
+`.pkgmeta` `manual-changelog` names `.release-notes.md`, not `CHANGELOG.md`. The packager
+sends that file as the CurseForge file's changelog and as the GitHub release body.
+`.github/scripts/release-notes.sh` writes it before packaging, from one `CHANGELOG.md`
+section:
+
+- A tag build (a `v*` tag push, or a manual run whose `ref` is a tag) takes the section whose
+  heading is `## ` plus the tag without its leading `v`, either alone or followed by a space.
+  `v2.1.0-forever-beta.1` takes `## 2.1.0-forever-beta.1 — 2026-10-20`. With no such heading the
+  step fails with `CHANGELOG.md has no '## <version>' heading for tag <tag>`, before anything is
+  packaged.
+- Any other run (a branch, a SHA, or a blank `ref`) takes the topmost `## ` section.
+
+The section runs from its heading to the line before the next `## ` heading, with trailing
+blank lines dropped. `CHANGELOG.md` indents every line by two spaces. The script removes that
+indent, so the notes are plain markdown. A bare `ref` that names both a branch and a tag counts
+as the branch, as `actions/checkout` does. `tools/test-release-notes.sh` covers these cases and
+runs from `tools/test-release-preflight.sh`, so CI runs it.
+
+The file is untracked and starts with a dot, so the packager never copies it into the zip. The
+zip still holds `GuildCrafts/CHANGELOG.md` with the full history, upstream's included. The game
+client doesn't load it, and its opening line says which entries are the fork's. A local packager
+run without the file falls back to a changelog built from commit subjects.
 
 ### Why `.pkgmeta` `ignore` isn't enough
 
@@ -137,7 +166,9 @@ packager on its own would skip CurseForge without an error and still create the 
 ### 1. Prepare the commit
 
 1. Rename `## Unreleased` in `CHANGELOG.md` to the version and date, in the form
-   `## 2.1.0-forever-beta.1 — YYYY-MM-DD`, and merge that to `main`.
+   `## 2.1.0-forever-beta.1 — YYYY-MM-DD`, and merge that to `main`. The version must be the
+   tag you'll push without its leading `v`, followed by a space. Keep the two-space indent the
+   file uses. The tag run fails before packaging if it can't find this heading.
 2. Run the regression scripts from the repository root (see `docs/testing.md`).
    ```bash
    for t in tools/test-*.lua; do lua5.1 "$t" || echo "FAILED: $t"; done
@@ -180,13 +211,14 @@ SHA. The zip and TOC carry the short SHA instead of the tag name; everything els
    ```
 3. Watch that run until it ends. Expect the gate line
    `forever-gate: OK (Game version: 1.60.1; GuildCrafts-<short-sha>-forever.zip; CTL v32)` and
-   a skipped publish step.
+   a skipped publish step. A SHA isn't a tag, so the notes step takes the topmost section and
+   logs `release-notes: wrote '## 2.1.0-forever-beta.1 — YYYY-MM-DD' (<n> lines)`.
    ```bash
    gh run watch <run-id> --repo lxhwes/GuildCrafts-Forever --exit-status
    ```
-4. Download that run's artifact.
+4. Download that run's artifacts, the zip and the release notes.
    ```bash
-   gh run download <run-id> --repo lxhwes/GuildCrafts-Forever -n guildcrafts-forever -D ~/Downloads/gc-<run-id>
+   gh run download <run-id> --repo lxhwes/GuildCrafts-Forever -n guildcrafts-forever -n release-notes -D ~/Downloads/gc-<run-id>
    ```
 
 ### 3. Inspect the artifact
@@ -194,7 +226,7 @@ SHA. The zip and TOC carry the short SHA instead of the tag name; everything els
 Run these in `~/Downloads/gc-<run-id>`. Set `Z` first:
 
 ```bash
-Z=$(ls GuildCrafts-*-forever.zip)
+Z=$(ls guildcrafts-forever/GuildCrafts-*-forever.zip)
 ```
 
 1. Check the only TOC outside `Libs/` is `GuildCrafts/GuildCrafts_Camelot.toc`.
@@ -222,7 +254,12 @@ Z=$(ls GuildCrafts-*-forever.zip)
    ```bash
    unzip -p "$Z" GuildCrafts/Libs/AceComm-3.0/ChatThrottleLib.lua | grep -Eo 'CTL_VERSION = [0-9]+'
    ```
-7. Optionally install the unzipped folder on the Forever client and check `/gc comms` reads
+7. Check the release notes hold one section, headed with the version you'll tag. Expect one
+   `## ` line, `## 2.1.0-forever-beta.1 — YYYY-MM-DD`.
+   ```bash
+   grep '^## ' release-notes/.release-notes.md
+   ```
+8. Optionally install the unzipped folder on the Forever client and check `/gc comms` reads
    `--- Comms Status (GuildCrafts <short-sha>) ---`.
 
 Stop here if anything is off. Nothing has been published yet.
@@ -283,12 +320,3 @@ blank `ref` is refused even if its commit carries a tag.
 Use this path only to retry a failed publish for an existing `v*` tag, and pass that tag name
 as `ref`. Check CurseForge first. The publish step's checks run after the upload, so a failed
 run may already have uploaded a file, and a retry would upload a second one.
-
----
-
-## Open items
-
-- Changelog upload. `.pkgmeta` `manual-changelog` sends the whole `CHANGELOG.md` as each
-  file's changelog. Most of it is upstream's Classic history. Not solved yet; tracked as H20,
-  [#80](https://github.com/lxhwes/GuildCrafts-Forever/issues/80), in Phase 1, to land before
-  the first publish.
