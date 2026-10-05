@@ -921,6 +921,22 @@ test("a request older than the requester's sync timeout is dropped", function()
     assert(answered("Bravo-Realm"), "fresh request not answered")
 end)
 
+test("a queued retry is dropped once its requester stops waiting", function()
+    pausedDr()
+    request("Alpha-Realm", 1)
+    now = now + Comms.SYNC_RETRY_TIMEOUT + 1
+    endCombat()
+    assert(not answered("Alpha-Realm"), "answered a retry its sender gave up on")
+end)
+
+test("a queued first request is kept until the sync timeout", function()
+    pausedDr()
+    request("Alpha-Realm", 0)
+    now = now + Comms.SYNC_TIMEOUT
+    endCombat()
+    assert(answered("Alpha-Realm"), "dropped a first request its sender still waits on")
+end)
+
 test("the queue is bounded", function()
     pausedDr()
     for i = 1, Comms.SYNC_QUEUE_MAX + 5 do request("Peer" .. i .. "-Realm") end

@@ -41,6 +41,7 @@ local SYNC_CHUNK_SIZE      = 5       -- max members per sync chunk
 local SYNC_CHUNK_DELAY     = 1.0     -- seconds between chunks (avoids burst lag)
 local SYNC_QUEUE_MAX       = 40      -- queued SYNC_REQUESTs the DR holds, one per requester
 Comms.SYNC_QUEUE_MAX = SYNC_QUEUE_MAX
+Comms.SYNC_TIMEOUT, Comms.SYNC_RETRY_TIMEOUT = SYNC_TIMEOUT, SYNC_RETRY_TIMEOUT
 
 -- ChatThrottleLib priorities
 local PRIO_BULK   = "BULK"
@@ -799,9 +800,10 @@ end
 
 --- Why a queued request should no longer be answered, or nil.
 function Comms:QueuedSyncRequestDropReason(entry, now)
-    -- Past the longest a requester waits for one attempt, it has been answered
-    -- elsewhere or run out of retries; bounds stale work after a long pause.
-    if now - entry.queuedAt > SYNC_TIMEOUT then return "requester timed out" end
+    -- After this the requester has re-asked the BDR or re-elected, so a late
+    -- reply only duplicates.
+    local wait = (entry.retry or 0) == 0 and SYNC_TIMEOUT or SYNC_RETRY_TIMEOUT
+    if now - entry.queuedAt > wait then return "requester timed out" end
     -- Whispering a player who logged off prints a system error. Only a roster read
     -- after the request counts: the request itself proved them online.
     local data = GuildCrafts.Data
