@@ -466,6 +466,7 @@ Data._onlineCache = {}
 
 function Data:RebuildOnlineCache()
     self._onlineCache = {}
+    self._onlineCacheAt = time()  -- Comms trusts an offline flag only if newer than a request
     if not IsInGuild() then return end
 
     local numMembers = GetNumGuildMembers()

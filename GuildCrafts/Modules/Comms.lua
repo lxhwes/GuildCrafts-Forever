@@ -799,11 +799,16 @@ end
 
 --- Why a queued request should no longer be answered, or nil.
 function Comms:QueuedSyncRequestDropReason(entry, now)
-    -- The requester has stopped waiting and retries on its own.
+    -- Past the longest a requester waits for one attempt, it has been answered
+    -- elsewhere or run out of retries; bounds stale work after a long pause.
     if now - entry.queuedAt > SYNC_TIMEOUT then return "requester timed out" end
-    -- Whispering a player who logged off prints a system error.
-    local onlineCache = GuildCrafts.Data._onlineCache
-    if onlineCache and onlineCache[entry.requester] == false then return "requester offline" end
+    -- Whispering a player who logged off prints a system error. Only a roster read
+    -- after the request counts: the request itself proved them online.
+    local data = GuildCrafts.Data
+    if data._onlineCache and data._onlineCache[entry.requester] == false
+            and (data._onlineCacheAt or 0) > entry.queuedAt then
+        return "requester offline"
+    end
     if self.myRole == "DR" then return nil end
     if entry.retry == 1 and self.myRole == "BDR" then return nil end
     return "no longer " .. (entry.retry == 1 and "DR or BDR" or "DR")

@@ -783,7 +783,7 @@ local function pausedDr()
     Comms.myRole = "DR"
     playerKey = "Dr-Realm"
     db = { ["Owner-Realm"] = entry({ Alchemy = profession(5) }, 500) }
-    Data._onlineCache = {}
+    Data._onlineCache, Data._onlineCacheAt = {}, nil
     versionVectorReads = 0
     Pause:OnCombatStart()
 end
@@ -874,10 +874,20 @@ test("a requester who logged off while queued is skipped", function()
     pausedDr()
     request("Alpha-Realm")
     request("Bravo-Realm")
-    Data._onlineCache["Alpha-Realm"] = false
+    now = now + 1
+    Data._onlineCache, Data._onlineCacheAt = { ["Alpha-Realm"] = false }, now
     endCombat()
     assert(not answered("Alpha-Realm"), "whispered an offline requester")
     assert(answered("Bravo-Realm"), "online requester not answered")
+end)
+
+test("a roster snapshot older than the request doesn't drop it", function()
+    pausedDr()
+    Data._onlineCache, Data._onlineCacheAt = { ["Alpha-Realm"] = false }, now
+    now = now + 1
+    request("Alpha-Realm")
+    endCombat()
+    assert(answered("Alpha-Realm"), "dropped a requester who reconnected after the roster read")
 end)
 
 test("a repeat request from a queued peer replaces its entry", function()
