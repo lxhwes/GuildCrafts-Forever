@@ -704,6 +704,22 @@ test("one stray recipe from another profession is skipped and the rest are store
     assert(logged("1 from another profession"), "skipped recipe not logged: " .. table.concat(debugs, " | "))
 end)
 
+test("a recipe with no owner name yet holds the whole scan for a retry", function()
+    local resolved = false
+    window("Alchemy", function(id)
+        return { professionName = (id ~= 203 or resolved) and "Alchemy" or "" }
+    end)
+    Data:ScanTradeSkillModern()
+    assert(not (db[playerKey] and next(db[playerKey].professions.Alchemy.recipes)),
+        "a scan with an unresolved recipe stored a partial list")
+    assert(#sent == 0, "a partial list was broadcast")
+    assert(#timers == 1, "an unresolved owner did not retry")
+    assert(logged("no owner yet"), "retry reason missing: " .. table.concat(debugs, " | "))
+    resolved = true
+    table.remove(timers, 1).fn()
+    assert(count(db[playerKey].professions.Alchemy) == 3, "the retry did not store the full list")
+end)
+
 test("without GetProfessionInfoByRecipeID the scan stores the whole list", function()
     window("Herbalism", nil)
     assert(Data:ScanTradeSkillModern())

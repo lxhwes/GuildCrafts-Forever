@@ -1667,13 +1667,15 @@ local function GetRecipeCategoryName(info)
     end
 end
 
--- H21: true when the client files recipeID under profName. Recipes may sit on a child skill
--- line (2937-2948) whose parentProfessionName is the window's name (PSL, 2026-10-02), so
--- either name may match. Names, because the F21 fallback has no window profession ID.
+-- H21: whether the client files recipeID under profName; nil when it names no profession yet.
+-- Recipes may sit on a child skill line (2937-2948) whose parentProfessionName is the window's
+-- name (PSL, 2026-10-02), so either name may match. Names, because the F21 fallback has no
+-- window profession ID.
 local function RecipeBelongsTo(recipeID, profName)
     local info = C_TradeSkillUI.GetProfessionInfoByRecipeID(recipeID)
-    if not info then return false end
-    local parent, own = NonEmpty(info.parentProfessionName), NonEmpty(info.professionName)
+    local parent = info and NonEmpty(info.parentProfessionName)
+    local own = info and NonEmpty(info.professionName)
+    if not parent and not own then return nil end
     return (parent and Data:GetCanonicalProfName(parent) == profName)
         or (own and Data:GetCanonicalProfName(own) == profName) or false
 end
@@ -1798,17 +1800,26 @@ function Data:ScanTradeSkillModern(isRetry)
     end
 
     -- H21: after a quick window switch the list can still be the previous window's.
-    local learned, strays = {}, 0
+    local learned, strays, unresolved = {}, 0, 0
     local checkOwner = C_TradeSkillUI.GetProfessionInfoByRecipeID ~= nil
     for _, recipeID in ipairs(recipeIDs) do
         local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
         if info and info.learned then
-            if checkOwner and not RecipeBelongsTo(recipeID, profName) then
+            local belongs = true
+            if checkOwner then belongs = RecipeBelongsTo(recipeID, profName) end
+            if belongs then
+                learned[#learned + 1] = { recipeID = recipeID, info = info }
+            elseif belongs == false then
                 strays = strays + 1
             else
-                learned[#learned + 1] = { recipeID = recipeID, info = info }
+                unresolved = unresolved + 1
             end
         end
+    end
+    -- Storing a partial list would let this snapshot drop the rest from peers.
+    if unresolved > 0 then
+        self:RetryModernScan(1, string.format("%d learned %s recipe(s) have no owner yet", unresolved, profName))
+        return
     end
     if strays * 2 > strays + #learned then
         self:RetryModernScan(1, string.format("recipe list isn't %s's yet (%d of %d learned belong elsewhere)",
