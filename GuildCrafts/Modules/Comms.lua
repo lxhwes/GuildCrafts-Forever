@@ -78,7 +78,7 @@ local SELF_KEY_FIELD = {
 }
 -- Covers the login HELLO through a full sync with retries; DR heartbeats refresh it.
 local SENDER_FALLBACK_TTL = 300
-local SENDER_FALLBACK_MAX = 40
+local SENDER_FALLBACK_MAX = 40  -- floor; the bound grows to the roster size
 Comms.SENDER_FALLBACK_TTL = SENDER_FALLBACK_TTL
 Comms.SENDER_FALLBACK_MAX = SENDER_FALLBACK_MAX
 
@@ -1562,7 +1562,14 @@ function Comms:ResolveSenderFallback(rawSender, envelope, distribution)
                 evict, oldestAt = name, other.at
             end
         end
-        if count < SENDER_FALLBACK_MAX then
+        -- Only guild members send on GUILD, so real guildmates can't fill a roster-sized cache.
+        local limit = SENDER_FALLBACK_MAX
+        local members = GetNumGuildMembers and GetNumGuildMembers()
+        if type(members) == "number" and not (issecretvalue and issecretvalue(members))
+            and members > limit then
+            limit = members
+        end
+        if count < limit then
             evict = nil
         elseif not evict then
             reason = "fallback cache full"

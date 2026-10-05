@@ -338,6 +338,24 @@ test("a full cache keeps active peers and refuses a new claim", function()
     assert(Comms.currentDR == kuw, "DR is " .. tostring(Comms.currentDR))
 end)
 
+test("the cache holds a whole roster of unresolvable members", function()
+    local n = Comms.SENDER_FALLBACK_MAX + 10
+    -- Roster rows without GUIDs: counted, but no name resolves.
+    roster = {}
+    for i = 1, n do roster[i] = { "Member " .. i, true, nil } end
+    now = now + 10
+    for i = 1, n do
+        now = now + 1
+        receive("Member " .. i, "HELLO", { sender = string.format("Player-4619-%08X", 0x100 + i), version = 3 })
+    end
+    assert(Comms.senderFallbackRefusals == 0, "refusals: " .. Comms.senderFallbackRefusals)
+    roster[n + 1] = { "New Member", true, nil }
+    local newcomer = "Player-4613-00000001"
+    receive("New Member", "HELLO", { sender = newcomer, version = 3 })
+    assert(Comms.addonUsers[newcomer], "newcomer refused")
+    assert(Comms.currentDR == newcomer, "DR is " .. tostring(Comms.currentDR))
+end)
+
 test("a full cache drops its oldest inactive entry for a new claim", function()
     coldStart()
     local max = Comms.SENDER_FALLBACK_MAX
