@@ -1,6 +1,7 @@
 -- Profession deletion regressions with stubbed WoW APIs.
 -- Run from the repository root: lua5.1 tools/test-profession-sync.lua
 local now = 1000
+local serverNow = 1000
 local known = {}
 local db = {}
 local messages = {}
@@ -10,6 +11,7 @@ local debugs = {}
 local timers = {}
 
 time = function() return now end
+GetServerTime = function() return serverNow end
 GetRealmName = function() return "Realm" end
 GetSpellInfo = function() return nil end
 IsSpellKnown = function() return false end
@@ -44,6 +46,7 @@ GuildCrafts = {
 dofile("GuildCrafts/Modules/Data.lua")
 dofile("GuildCrafts/Modules/Comms.lua")
 local Data, Comms = GuildCrafts.Data, GuildCrafts.Comms
+local realGetGuildDB = Data.GetGuildDB
 Data.GetGuildDB = function() return db end
 Data.GetPlayerKey = function() return playerKey end
 Data.GetGuildKey = function() return nil end
@@ -77,6 +80,7 @@ local function count(prof)
 end
 local function reset()
     now, known, db, messages, sent = 1000, {}, {}, {}, {}
+    serverNow = 1000
     playerKey = "Owner-Realm"
     skillLines = {}
     classicSkillLines()
@@ -653,6 +657,96 @@ test("an empty profession name falls back to the recipe, then retries", function
     assert(not logged("not tracked"), "empty name logged as not tracked")
     assert(#timers == 1, "empty name did not retry")
     assert(logged("no profession name"), "retry reason missing: " .. table.concat(debugs, " | "))
+end)
+
+-- H2 (#5): revisions use the realm clock, so a fast local clock can't win.
+local function deltaPayload(kind)
+    for _, message in ipairs(sent) do
+        if message.kind == "DELTA_UPDATE" and message.payload.type == kind then return message.payload end
+    end
+end
+
+test("a drop from a client 20 minutes fast loses to a later relearn", function()
+    local observer = { ["Owner-Realm"] = entry({ Alchemy = profession(3, 0, 900) }, 900) }
+    -- PC A: the local clock is 20 minutes fast.
+    now = serverNow + 1200
+    db = { ["Owner-Realm"] = entry({ Alchemy = profession(3, 0, 900) }, 900) }
+    known = { indices = { nil, 2 }, [2] = "Herbalism" }
+    Data:DropProfession("alchemy")
+    local removal = deltaPayload("remove_profession")
+    db, playerKey = observer, "Peer-Realm"
+    Comms:HandleDeltaUpdate(removal, "Owner-Realm")
+    assert(not observer["Owner-Realm"].professions.Alchemy, "drop not applied")
+    -- Five minutes later the owner relearns on PC B, whose clock is right and which
+    -- carries the drop history (restored from the guild's copy).
+    serverNow = serverNow + 300
+    now = serverNow
+    playerKey, sent = "Owner-Realm", {}
+    db = { ["Owner-Realm"] = entry({}, 950, { Alchemy = removal.lastUpdate }) }
+    tradeSkill()
+    assert(Data:ScanTradeSkillModern())
+    local relearn = deltaPayload("add")
+    db, playerKey = observer, "Peer-Realm"
+    Comms:HandleDeltaUpdate(relearn, "Owner-Realm")
+    local alchemy = observer["Owner-Realm"].professions.Alchemy
+    assert(alchemy and count(alchemy) == 2, "the fast clock's drop beat the relearn")
+end)
+
+test("stamps far ahead of server time are clamped, so a later snapshot wins", function()
+    playerKey = "Peer-Realm"
+    local future = serverNow + 365 * 86400
+    Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(3, 0, future) }, future, { Cooking = future }) })
+    Comms:HandleDeltaUpdate({ type = "touch", member = "Owner-Realm",
+        profession = "Alchemy", lastUpdate = future }, "Owner-Realm")
+    Data:MergeDelta("Owner-Realm", "Alchemy", 9, { name = "Future" }, future, future)
+    Data:MergeProfessionRemoval("Owner-Realm", "Tailoring", future)
+    Data:MergeIncoming({ ["Gone-Realm"] = { _tombstone = true, lastUpdate = future } })
+    local stored, ceiling = db["Owner-Realm"], serverNow + 300
+    assert(stored.lastUpdate <= ceiling, "member revision not clamped: " .. stored.lastUpdate)
+    assert(stored.professions.Alchemy.lastUpdate <= ceiling, "profession revision not clamped")
+    assert(stored.dropped.Cooking <= ceiling and stored.dropped.Tailoring <= ceiling, "drop not clamped")
+    assert(db["Gone-Realm"].lastUpdate <= ceiling, "tombstone not clamped")
+    -- Once the tolerance has passed, a correctly stamped snapshot replaces it.
+    serverNow = serverNow + 600
+    assert(Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(4, 100, serverNow) }, serverNow) }),
+        "broken clock still wins")
+    assert(Data:MergeIncoming({ ["Gone-Realm"] = entry({ Alchemy = profession(2, 0, serverNow) }, serverNow) }),
+        "future tombstone still blocks a rejoin")
+end)
+
+test("future stamps already in SavedVariables are clamped on first load", function()
+    local future = serverNow + 86400
+    Data.db.global = { G = {
+        [playerKey] = entry({ Alchemy = profession(3, 0, future) }, future, { Cooking = future }),
+        ["Gone-Realm"] = { _tombstone = true, lastUpdate = future },
+    } }
+    local originalKey = Data.GetGuildKey
+    Data.GetGuildKey = function() return "G" end
+    Data._guildMigrated, Data._memberKeysNormalized, Data._stampsClamped = true, true, nil
+    local ok, gdb = pcall(realGetGuildDB, Data)
+    Data.GetGuildKey = originalKey
+    Data._guildMigrated, Data._memberKeysNormalized, Data._stampsClamped = nil, nil, nil
+    assert(ok, gdb)
+    local own, ceiling = gdb[playerKey], serverNow + 300
+    assert(own.lastUpdate <= ceiling and own.professions.Alchemy.lastUpdate <= ceiling, "own revision not clamped")
+    assert(own.dropped.Cooking <= ceiling, "own drop not clamped")
+    assert(gdb["Gone-Realm"].lastUpdate <= ceiling, "stored tombstone not clamped")
+end)
+
+test("clients without GetServerTime stamp with the local clock", function()
+    -- Data.lua captures GetServerTime at load, so load a copy without it.
+    local saved, main = GetServerTime, GuildCrafts.Data
+    GetServerTime = nil
+    dofile("GuildCrafts/Modules/Data.lua")
+    local classic = GuildCrafts.Data
+    GuildCrafts.Data, GetServerTime = main, saved
+    classic.GetGuildDB, classic.GetPlayerKey = Data.GetGuildDB, Data.GetPlayerKey
+    classic.ScheduleTimer, classic.db = Data.ScheduleTimer, Data.db
+    now = serverNow + 1200
+    db[playerKey] = entry({ Alchemy = profession(3) }, 800)
+    known = { indices = { nil, 2 }, [2] = "Herbalism" }
+    classic:DropProfession("alchemy")
+    assert(db[playerKey].dropped.Alchemy == now, "fallback did not use time()")
 end)
 
 local failed = 0

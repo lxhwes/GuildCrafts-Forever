@@ -1092,7 +1092,7 @@ function Comms:BroadcastNewRecipes(memberKey, profName, recipes)
         member     = memberKey,
         profession = profName,
         recipes    = GuildCrafts.Data:StripRecipeReagents(recipes),
-        lastUpdate = entry and entry.lastUpdate or time(),
+        lastUpdate = entry and entry.lastUpdate or GuildCrafts.Data:Now(),
         dropped    = entry and entry.dropped and entry.dropped[profName] or 0,
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (add) for", memberKey, profName)
@@ -1109,7 +1109,7 @@ function Comms:BroadcastProfessionRemoval(memberKey, profName)
         type       = "remove_profession",
         member     = memberKey,
         profession = profName,
-        lastUpdate = entry and entry.lastUpdate or time(),
+        lastUpdate = entry and entry.lastUpdate or GuildCrafts.Data:Now(),
         x          = 1,  -- explicit /gc drop; receivers ignore removals without it
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (remove) for", memberKey, profName)
@@ -1139,7 +1139,7 @@ function Comms:BroadcastTimestampTouch(memberKey, profName)
         type       = "touch",
         member     = memberKey,
         profession = profName,
-        lastUpdate = entry and entry.lastUpdate or time(),
+        lastUpdate = entry and entry.lastUpdate or GuildCrafts.Data:Now(),
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (touch) for", memberKey, profName)
 end
@@ -1172,13 +1172,14 @@ function Comms:HandleDeltaUpdate(payload, sender)
         -- subsequent resurrection.
         local gdb = GuildCrafts.Data:GetGuildDB()
         local entry = gdb and gdb[memberKey]
+        local stamp = GuildCrafts.Data:ClampStamp(payload.lastUpdate)
         if entry and not entry._tombstone then
             local profData = payload.profession and entry.professions[payload.profession]
             if profData then
-                profData.lastUpdate = math.max(payload.lastUpdate,
+                profData.lastUpdate = math.max(stamp,
                     profData.lastUpdate or entry.lastUpdate or 0)
             end
-            entry.lastUpdate = math.max(payload.lastUpdate, entry.lastUpdate or 0)
+            entry.lastUpdate = math.max(stamp, entry.lastUpdate or 0)
         end
         GuildCrafts:Debug("DELTA_UPDATE (touch) from", sender, "for", memberKey)
         -- No recipe data changed; skip UI refresh.
