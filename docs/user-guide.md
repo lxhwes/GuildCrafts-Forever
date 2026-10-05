@@ -192,8 +192,6 @@ These are open in the current beta build. Each has a plan ID.
 - The `[W]` whisper button and shift-click links use Forever's chat API, and `[W]` sets the
   two-word name as the whisper target directly. Neither has been checked in game yet (F20, F25;
   H14).
-- Opening a guildmate's profession from the guild window may file their recipes under your
-  name. The scanner skips linked and NPC views, but not Blizzard's guild views (F5; H10).
 - `!gc` replies and `[G]` both send guild chat with `SendChatMessage`. Whether Forever allows
   that from an addon hasn't been checked yet (H14).
 - Outgoing sync pauses during combat (plus 6 seconds), inside instances (plus 15 seconds after

@@ -502,6 +502,26 @@ test("linked and NPC views log why they were skipped", function()
     assert(not db[playerKey], "a skipped view stored data")
 end)
 
+-- H10 (#13): a guild or guildmate recipe view isn't ours to store (F5).
+test("guild and guildmate views are skipped, and logged", function()
+    tradeSkill({ IsTradeSkillGuild = function() return true end })
+    Data:ScanTradeSkillModern()
+    assert(logged("guild recipe view"), "no reason for a guild view")
+    tradeSkill({ IsTradeSkillGuildMember = function() return true end })
+    Data:ScanTradeSkillModern()
+    assert(logged("guildmate's recipe view"), "no reason for a guildmate view")
+    assert(not db[playerKey], "a guild view stored data")
+end)
+
+test("own view scans when the guild view checks return false", function()
+    tradeSkill({
+        IsTradeSkillGuild = function() return false end,
+        IsTradeSkillGuildMember = function() return false end,
+    })
+    assert(Data:ScanTradeSkillModern())
+    assert(count(db[playerKey].professions.Alchemy) == 2, "own recipes not stored")
+end)
+
 test("a scan without a guild database logs why", function()
     tradeSkill()
     local original = Data.GetGuildDB

@@ -1630,9 +1630,18 @@ function Data:ScanTradeSkillModern(isRetry)
         self:RetryModernScan(1, "IsTradeSkillReady() = false")
         return
     end
-    -- Don't scan linked/NPC tradeskills — they aren't ours
+    -- Don't scan linked/guild/NPC tradeskills — they aren't ours. Blizzard's own test for an
+    -- external list (Blizzard_Professions.lua:377-378 at e3ecc27); guild views are off on 70205.
     if C_TradeSkillUI.IsTradeSkillLinked and C_TradeSkillUI.IsTradeSkillLinked() then
         GuildCrafts:Debug("ScanTradeSkillModern: skipped a linked profession view")
+        return
+    end
+    if C_TradeSkillUI.IsTradeSkillGuild and C_TradeSkillUI.IsTradeSkillGuild() then
+        GuildCrafts:Debug("ScanTradeSkillModern: skipped a guild recipe view")
+        return
+    end
+    if C_TradeSkillUI.IsTradeSkillGuildMember and C_TradeSkillUI.IsTradeSkillGuildMember() then
+        GuildCrafts:Debug("ScanTradeSkillModern: skipped a guildmate's recipe view")
         return
     end
     if C_TradeSkillUI.IsNPCCrafting and C_TradeSkillUI.IsNPCCrafting() then
