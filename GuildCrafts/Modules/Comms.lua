@@ -79,6 +79,7 @@ local SELF_KEY_FIELD = {
     [MSG_HELLO]        = "sender",
     [MSG_HEARTBEAT]    = "dr",
     [MSG_SYNC_REQUEST] = "sender",
+    [MSG_DELTA_UPDATE] = "member",  -- nobody relays deltas (H23)
 }
 -- Covers the login HELLO through a full sync with retries; DR heartbeats refresh it.
 local SENDER_FALLBACK_TTL = 300
@@ -174,6 +175,8 @@ function Comms:OnInitialize()
     self.senderFallbacks           = 0
     self.senderFallbackRefusals    = 0
     self.senderFallbackRevocations = 0
+    -- DELTA_UPDATEs dropped for naming a member other than their sender (H23).
+    self.deltaSenderRefusals       = 0
 end
 
 function Comms:OnEnable()
@@ -1816,11 +1819,15 @@ function Comms:ProcessIncoming(message, distribution, sender)
         end
         viaFallback = true
     end
-    -- Forever: HELLO, HEARTBEAT and SYNC_REQUEST may only speak for their own sender.
+    -- Forever: HELLO, HEARTBEAT, SYNC_REQUEST and DELTA_UPDATE may only speak for their own sender.
     local selfField = GuildCrafts.Data.CheckSenderClaim and SELF_KEY_FIELD[envelope.t]
     local claimed = selfField and type(envelope.p) == "table" and envelope.p[selfField]
     if claimed ~= nil and claimed ~= false and GuildCrafts.Data:NormalizeMemberKey(claimed) ~= sender then
-        self.senderFallbackRefusals = self.senderFallbackRefusals + 1
+        if envelope.t == MSG_DELTA_UPDATE then
+            self.deltaSenderRefusals = self.deltaSenderRefusals + 1
+        else
+            self.senderFallbackRefusals = self.senderFallbackRefusals + 1
+        end
         GuildCrafts:Debug("Sender mismatch:", envelope.t, "from", rawSender, "(" .. sender .. ")",
             "claims", tostring(claimed))
         return
