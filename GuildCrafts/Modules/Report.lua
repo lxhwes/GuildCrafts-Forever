@@ -197,6 +197,7 @@ local function AddSync(out)
     out[#out + 1] = string.format("Sender fallbacks: accepted %s, refused %s, revoked %s",
         tostring(Comms.senderFallbacks), tostring(Comms.senderFallbackRefusals),
         tostring(Comms.senderFallbackRevocations))
+    out[#out + 1] = "Delta sender refusals: " .. tostring(Comms.deltaSenderRefusals)
     out[#out + 1] = "Send failures: " .. tostring(Comms.sendFailures)
 end
 

@@ -186,6 +186,7 @@ test("report carries sync, discovery and pause state", function()
     has(text, "Last message received: never")
     has(text, "Unresolved-sender drops: 0")
     has(text, "Sender fallbacks: accepted 0, refused 0, revoked 0")
+    has(text, "Delta sender refusals: 0")
     has(text, "Pause: true (combat false, instance true, transition false, restrictions none)")
 end)
 
