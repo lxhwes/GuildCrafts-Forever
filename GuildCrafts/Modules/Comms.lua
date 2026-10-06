@@ -130,6 +130,8 @@ function Comms:OnInitialize()
 
     -- Pending re-sync debounce timer (shared across HandleHello / TouchAddonUser / RecomputeElection)
     self._pendingSyncTimer = nil
+    -- memberKey -> revision a pull was wanted for while a sync was in flight (H22)
+    self._recheckAfterSync = {}
 
     -- BroadcastHello pause-reschedule timer (tracked so we never accumulate duplicates)
     self._helloRescheduleTimer = nil
@@ -1059,6 +1061,17 @@ function Comms:_FinalizeSyncResponse(successSender)
         self.syncTimer = nil
     end
 
+    -- Changes announced mid-sync: pull once more if this sync didn't bring them (H22).
+    local recheck = self._recheckAfterSync
+    self._recheckAfterSync = {}
+    for memberKey, revision in pairs(recheck) do
+        if not GuildCrafts.Data:HoldsBase(memberKey, revision) then
+            GuildCrafts:Debug("Sync didn't bring", memberKey, "revision", revision, "— pulling again")
+            self:ScheduleJitteredSync()
+            break
+        end
+    end
+
     -- Notify UI to refresh if loaded
     if GuildCrafts.UI and GuildCrafts.UI.Refresh then
         GuildCrafts.UI:Refresh()
@@ -1217,7 +1230,10 @@ end
 -- DELTA_UPDATE
 ----------------------------------------------------------------------
 
-function Comms:BroadcastNewRecipes(memberKey, profName, recipes)
+-- base, on all three delta types, is the member's revision before this change (H22).
+-- It's optional: older receivers ignore it.
+
+function Comms:BroadcastNewRecipes(memberKey, profName, recipes, base)
     if GuildCrafts.SyncPausePolicy and GuildCrafts.SyncPausePolicy:ShouldPause() then
         GuildCrafts:Debug("BroadcastNewRecipes suppressed (SyncPausePolicy) for", profName)
         return
@@ -1231,11 +1247,12 @@ function Comms:BroadcastNewRecipes(memberKey, profName, recipes)
         recipes    = GuildCrafts.Data:StripRecipeReagents(recipes),
         lastUpdate = entry and entry.lastUpdate or GuildCrafts.Data:Now(),
         dropped    = entry and entry.dropped and entry.dropped[profName] or 0,
+        base       = base,
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (add) for", memberKey, profName)
 end
 
-function Comms:BroadcastProfessionRemoval(memberKey, profName)
+function Comms:BroadcastProfessionRemoval(memberKey, profName, base)
     if GuildCrafts.SyncPausePolicy and GuildCrafts.SyncPausePolicy:ShouldPause() then
         GuildCrafts:Debug("BroadcastProfessionRemoval suppressed (SyncPausePolicy) for", profName)
         return
@@ -1248,6 +1265,7 @@ function Comms:BroadcastProfessionRemoval(memberKey, profName)
         profession = profName,
         lastUpdate = entry and entry.lastUpdate or GuildCrafts.Data:Now(),
         x          = 1,  -- explicit /gc drop; receivers ignore removals without it
+        base       = base,
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (remove) for", memberKey, profName)
 end
@@ -1256,7 +1274,7 @@ end
 --- is opened but no new recipes are found and the data is 25+ days old. This
 --- prevents peers (including the DR) from pruning a player who is simply up to
 --- date and has nothing new to learn.
-function Comms:BroadcastTimestampTouch(memberKey, profName)
+function Comms:BroadcastTimestampTouch(memberKey, profName, base)
     if GuildCrafts.SyncPausePolicy and GuildCrafts.SyncPausePolicy:ShouldPause() then
         GuildCrafts:Debug("BroadcastTimestampTouch suppressed (SyncPausePolicy) for", profName)
         return
@@ -1277,6 +1295,7 @@ function Comms:BroadcastTimestampTouch(memberKey, profName)
         member     = memberKey,
         profession = profName,
         lastUpdate = entry and entry.lastUpdate or GuildCrafts.Data:Now(),
+        base       = base,
     }, "GUILD", nil, PRIO_NORMAL)
     GuildCrafts:Debug("Broadcast DELTA_UPDATE (touch) for", memberKey, profName)
 end
@@ -1292,11 +1311,15 @@ function Comms:HandleDeltaUpdate(payload, sender)
     -- Seeing a DELTA_UPDATE proves sender is online with the addon.
     self:TouchAddonUser(sender)
 
+    -- H22: a delta carries only this change. Our copy takes its revision only if it
+    -- already holds the base; otherwise we merge what it carries and pull the rest.
+    local current = GuildCrafts.Data:HoldsBase(memberKey, payload.base)
+
     if payload.type == "add" and payload.profession and payload.recipes then
         -- Merge each recipe
         for recipeKey, recipeData in pairs(payload.recipes) do
             GuildCrafts.Data:MergeDelta(memberKey, payload.profession,
-                recipeKey, recipeData, payload.lastUpdate, payload.dropped)
+                recipeKey, recipeData, payload.lastUpdate, payload.dropped, current)
         end
         GuildCrafts:Debug("DELTA_UPDATE (add) from", sender, "for", memberKey)
 
@@ -1315,9 +1338,12 @@ function Comms:HandleDeltaUpdate(payload, sender)
                 profData.lastUpdate = math.max(payload.lastUpdate,
                     profData.lastUpdate or entry.lastUpdate or 0)
             end
-            entry.lastUpdate = math.max(payload.lastUpdate, entry.lastUpdate or 0)
+            if current then
+                entry.lastUpdate = math.max(payload.lastUpdate, entry.lastUpdate or 0)
+            end
         end
         GuildCrafts:Debug("DELTA_UPDATE (touch) from", sender, "for", memberKey)
+        if not current then self:PullMissedChanges(memberKey, payload.base, payload.lastUpdate) end
         -- No recipe data changed; skip UI refresh.
         return
 
@@ -1332,13 +1358,16 @@ function Comms:HandleDeltaUpdate(payload, sender)
         local entry = gdb and gdb[memberKey]
         if payload.profession then
             GuildCrafts.Data:MergeProfessionRemoval(memberKey,
-                payload.profession, payload.lastUpdate)
+                payload.profession, payload.lastUpdate, current)
         elseif entry and payload.lastUpdate and payload.lastUpdate > (entry.lastUpdate or 0) then
             -- A removal without a profession name needs a full snapshot.
             GuildCrafts:Debug("DELTA_UPDATE removal without profession name — will resolve on next sync")
         end
         GuildCrafts:Debug("DELTA_UPDATE (remove) from", sender, "for", memberKey)
+    else
+        return
     end
+    if not current then self:PullMissedChanges(memberKey, payload.base, payload.lastUpdate) end
 
     -- Notify UI to refresh
     if GuildCrafts.UI and GuildCrafts.UI.Refresh then
@@ -1411,18 +1440,44 @@ function Comms:HandleDeltaAd(payload, sender)
     end
 
     -- Non-DR nodes queue a sync pull with jitter to avoid a thundering-herd burst.
-    if not self.syncPending then
-        local jitter = AD_JITTER_MIN + math.random() * (AD_JITTER_MAX - AD_JITTER_MIN)
-        if self._pendingSyncTimer then
-            self:CancelTimer(self._pendingSyncTimer)
-        end
-        self._pendingSyncTimer = self:ScheduleTimer(function()
-            self._pendingSyncTimer = nil
-            self:SendSyncRequest()
-        end, jitter)
+    local jitter = self:ScheduleJitteredSync(memberKey, payload.rev)
+    if jitter then
         GuildCrafts:Debug("DELTA_AD: queued sync pull in",
             string.format("%.1fs", jitter))
     end
+end
+
+--- Schedule a SYNC_REQUEST 1-5 s out, replacing any pending one. Returns the delay.
+--- While a sync is in flight, returns nil and rechecks memberKey at revision once it ends.
+function Comms:ScheduleJitteredSync(memberKey, revision)
+    if self.syncPending then
+        if memberKey and type(revision) == "number" then
+            self._recheckAfterSync[memberKey] = math.max(revision, self._recheckAfterSync[memberKey] or 0)
+        end
+        return nil
+    end
+    local jitter = AD_JITTER_MIN + math.random() * (AD_JITTER_MAX - AD_JITTER_MIN)
+    if self._pendingSyncTimer then
+        self:CancelTimer(self._pendingSyncTimer)
+    end
+    self._pendingSyncTimer = self:ScheduleTimer(function()
+        self._pendingSyncTimer = nil
+        self:SendSyncRequest()
+    end, jitter)
+    return jitter
+end
+
+--- A delta showed our copy of memberKey is missing changes before base (H22).
+function Comms:PullMissedChanges(memberKey, base, revision)
+    if self.myRole == "DR" then
+        -- SendSyncRequest skips the DR. The member's next SYNC_REQUEST finds it
+        -- ahead of us, and we pull it then.
+        GuildCrafts:Debug("DR keeps", memberKey, "behind base", tostring(base), "until its next sync")
+        return
+    end
+    local jitter = self:ScheduleJitteredSync(memberKey, revision)
+    GuildCrafts:Debug("Missing changes for", memberKey, "before base", tostring(base),
+        jitter and string.format("— sync pull in %.1fs", jitter) or "— rechecking after the sync in flight")
 end
 
 ----------------------------------------------------------------------

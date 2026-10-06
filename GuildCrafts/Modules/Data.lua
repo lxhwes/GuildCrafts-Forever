@@ -740,6 +740,41 @@ local function AdvanceRevision(entry, profName)
     return entry.lastUpdate
 end
 
+local function HasRecipeContent(entry)
+    if entry.dropped and next(entry.dropped) then return true end
+    for _, profData in pairs(entry.professions or {}) do
+        if next(profData.recipes or {}) then return true end
+    end
+    return false
+end
+
+-- Newest change we hold for a member. Above lastUpdate only when a delta was merged
+-- without its revision (H22), which moves just the profession's.
+local function LastActive(entry)
+    local latest = entry.lastUpdate or 0
+    for _, profData in pairs(entry.professions or {}) do
+        if (profData.lastUpdate or 0) > latest then latest = profData.lastUpdate end
+    end
+    return latest
+end
+
+-- The revision a peer must already hold to take our next recipe delta's revision (H22).
+-- Only recipe changes move it: deltas never carry skill levels, and no-change scans
+-- refresh lastUpdate without telling anyone.
+local function RecipeBase(entry)
+    if not entry.recipeRev and HasRecipeContent(entry) then
+        -- Saved before H22: lastUpdate is at or past the last recipe change. Pin it
+        -- before a no-change scan moves lastUpdate.
+        entry.recipeRev = entry.lastUpdate
+    end
+    return entry.recipeRev or 0
+end
+
+local function AdvanceRecipeRevision(entry, profName)
+    entry.recipeRev = AdvanceRevision(entry, profName)  -- local only; never synced
+    return entry.recipeRev
+end
+
 --- Read current professions without changing stored recipes or drop history.
 function Data:ReadCurrentProfessions()
     local currentProfs = {}
@@ -812,6 +847,7 @@ function Data:DetectProfessions()
 
     -- Always clear absent marker on self — we are definitively online
     if entry._absentSince then entry._absentSince = nil end
+    RecipeBase(entry)  -- pin a pre-H22 base before this read moves lastUpdate
 
     local currentProfs, skillLevels = self:ReadCurrentProfessions()
 
@@ -919,7 +955,8 @@ function Data:DropProfession(input)
         return
     end
 
-    local now = AdvanceRevision(entry)
+    local base = RecipeBase(entry)
+    local now = AdvanceRecipeRevision(entry)
     entry.professions[profName] = nil
     entry.dropped = entry.dropped or {}
     entry.dropped[profName] = now
@@ -928,7 +965,7 @@ function Data:DropProfession(input)
         GuildCrafts.Tooltip:InvalidateIndex()
     end
     if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastProfessionRemoval then
-        GuildCrafts.Comms:BroadcastProfessionRemoval(playerKey, profName)
+        GuildCrafts.Comms:BroadcastProfessionRemoval(playerKey, profName, base)
     end
     GuildCrafts:Printf("Removed %s and its recipes.", profName)
     if GuildCrafts.UI and GuildCrafts.UI.Refresh then
@@ -1234,6 +1271,7 @@ function Data:ScanTradeSkill()
     if not entry then return end
     -- Capture age before any processing so backfill cannot poison the threshold check.
     local ageAtScanStart = entry.lastUpdate and (Now() - entry.lastUpdate) or math.huge
+    local base = RecipeBase(entry)
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
         AdvanceRevision(entry, profName)
@@ -1324,12 +1362,12 @@ function Data:ScanTradeSkill()
 
     local changed = newCount > 0
     if newCount > 0 then
-        AdvanceRevision(entry, profName)
+        AdvanceRecipeRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: %d new recipe(s) found.", profName, newCount)
 
         -- Only broadcast the newly discovered recipes, not the entire set
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastNewRecipes then
-            GuildCrafts.Comms:BroadcastNewRecipes(playerKey, profName, newRecipes)
+            GuildCrafts.Comms:BroadcastNewRecipes(playerKey, profName, newRecipes, base)
         end
         -- Advertise the new revision to peers who may have missed DELTA_UPDATE
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastLocalAdvertise then
@@ -1351,7 +1389,7 @@ function Data:ScanTradeSkill()
         -- threshold (25–45 days). Avoids spamming the DR on every profession open.
         -- Use ageAtScanStart (captured before backfill) so backfill cannot reset the age.
         if ageAtScanStart >= TOUCH_BROADCAST_THRESHOLD and GuildCrafts.Comms and GuildCrafts.Comms.BroadcastTimestampTouch then
-            GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName)
+            GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName, base)
         end
         GuildCrafts:Debug("Scanned " .. profName .. ": no new recipes.")
     end
@@ -1441,6 +1479,7 @@ function Data:ScanCraft()
     if not entry then return end
     -- Capture age before any processing so backfill cannot poison the threshold check.
     local ageAtScanStart = entry.lastUpdate and (Now() - entry.lastUpdate) or math.huge
+    local base = RecipeBase(entry)
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
         AdvanceRevision(entry, profName)
@@ -1530,11 +1569,11 @@ function Data:ScanCraft()
 
     local changed = newCount > 0
     if newCount > 0 then
-        AdvanceRevision(entry, profName)
+        AdvanceRecipeRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: %d new recipe(s) found.", profName, newCount)
 
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastNewRecipes then
-            GuildCrafts.Comms:BroadcastNewRecipes(playerKey, profName, newRecipes)
+            GuildCrafts.Comms:BroadcastNewRecipes(playerKey, profName, newRecipes, base)
         end
         -- Advertise the new revision to peers who may have missed DELTA_UPDATE
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastLocalAdvertise then
@@ -1556,7 +1595,7 @@ function Data:ScanCraft()
         -- threshold (25–45 days). Avoids spamming the DR on every profession open.
         -- Use ageAtScanStart (captured before backfill) so backfill cannot reset the age.
         if ageAtScanStart >= TOUCH_BROADCAST_THRESHOLD and GuildCrafts.Comms and GuildCrafts.Comms.BroadcastTimestampTouch then
-            GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName)
+            GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName, base)
         end
         GuildCrafts:Debug("Scanned " .. profName .. ": no new recipes.")
     end
@@ -1770,6 +1809,7 @@ function Data:ScanTradeSkillModern(isRetry)
         return
     end
     local ageAtScanStart = entry.lastUpdate and (Now() - entry.lastUpdate) or math.huge
+    local base = RecipeBase(entry)
     if not entry.professions[profName] then
         entry.professions[profName] = { recipes = {} }
         AdvanceRevision(entry, profName)
@@ -1871,11 +1911,11 @@ function Data:ScanTradeSkillModern(isRetry)
         strays > 0 and string.format(", %d from another profession skipped", strays) or ""))
     local changed = newCount > 0
     if newCount > 0 then
-        AdvanceRevision(entry, profName)
+        AdvanceRecipeRevision(entry, profName)
         GuildCrafts:Printf("Scanned %s: %d new recipe(s) found.", profName, newCount)
 
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastNewRecipes then
-            GuildCrafts.Comms:BroadcastNewRecipes(playerKey, profName, newRecipes)
+            GuildCrafts.Comms:BroadcastNewRecipes(playerKey, profName, newRecipes, base)
         end
         if GuildCrafts.Comms and GuildCrafts.Comms.BroadcastLocalAdvertise then
             GuildCrafts.Comms:BroadcastLocalAdvertise(
@@ -1888,7 +1928,7 @@ function Data:ScanTradeSkillModern(isRetry)
         entry.lastUpdate = math.max(Now(), entry.lastUpdate or 0)
         entry.professions[profName].lastUpdate = entry.lastUpdate
         if ageAtScanStart >= TOUCH_BROADCAST_THRESHOLD and GuildCrafts.Comms and GuildCrafts.Comms.BroadcastTimestampTouch then
-            GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName)
+            GuildCrafts.Comms:BroadcastTimestampTouch(playerKey, profName, base)
         end
     end
 
@@ -2084,7 +2124,7 @@ function Data:MergeIncoming(incomingData)
                 -- Incoming tombstone: write it if it is newer than what we have.
                 -- Tombstones propagate the fact of deletion across all peers.
                 if incomingEntry._tombstone then
-                    if not localEntry or incomingEntry.lastUpdate > (localEntry.lastUpdate or 0) then
+                    if not localEntry or incomingEntry.lastUpdate > LastActive(localEntry) then
                         gdb[memberKey] = incomingEntry
                         changed = true
                         GuildCrafts:Debug("MergeIncoming: tombstone accepted for", memberKey)
@@ -2196,6 +2236,14 @@ function Data:CarryOverProfessions(memberKey, localEntry, incomingEntry)
                 incomingEntry.professions[profName] = localProf
                 GuildCrafts:Debug("MergeIncoming: kept", profName, "for", memberKey,
                     "(incoming had no recipes in the same generation)")
+            elseif (localProf.lastUpdate or 0) > incomingEntry.lastUpdate then
+                -- A delta newer than this snapshot, merged without its revision (H22).
+                -- Within one drop generation recipes are only added, so keep the union.
+                for recipeKey, recipe in pairs(localProf.recipes) do
+                    if not incomingProf.recipes[recipeKey] then incomingProf.recipes[recipeKey] = recipe end
+                end
+                incomingProf.lastUpdate = math.max(localProf.lastUpdate, incomingProf.lastUpdate or 0)
+                GuildCrafts:Debug("MergeIncoming: kept newer", profName, "recipes for", memberKey)
             end
         end
     end
@@ -2209,8 +2257,19 @@ function Data:CarryOverProfessions(memberKey, localEntry, incomingEntry)
     end
 end
 
+--- True when our copy of a member already holds everything up to base, so a delta
+--- built on base may advance the member's revision (H22). One without base never does.
+function Data:HoldsBase(memberKey, base)
+    if type(base) ~= "number" then return false end
+    local gdb = self:GetGuildDB()
+    local entry = gdb and gdb[memberKey]
+    if entry and entry._tombstone then return false end
+    return (entry and entry.lastUpdate or 0) >= base
+end
+
 --- Merge a single delta (one recipe added to a member's profession).
-function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpdate, dropRevision)
+--- advance: the receiver holds the delta's base (Data:HoldsBase).
+function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpdate, dropRevision, advance)
     local gdb = self:GetGuildDB()
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
@@ -2261,7 +2320,7 @@ function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpda
         recipeData.reagents = nil
         recipeData.category = nil
     end
-    if newLastUpdate and newLastUpdate > (entry.lastUpdate or 0) then
+    if advance and newLastUpdate and newLastUpdate > (entry.lastUpdate or 0) then
         entry.lastUpdate = newLastUpdate
     end
     if GuildCrafts.Tooltip then
@@ -2270,8 +2329,8 @@ function Data:MergeDelta(memberKey, profName, recipeKey, recipeData, newLastUpda
     GuildCrafts:Debug("Delta merged:", memberKey, profName, recipeKey)
 end
 
---- Handle a profession removal delta.
-function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate)
+--- Handle a profession removal delta. advance: as for MergeDelta.
+function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate, advance)
     local gdb = self:GetGuildDB()
     if not gdb then return end
     memberKey = self:NormalizeMemberKey(memberKey)
@@ -2299,7 +2358,9 @@ function Data:MergeProfessionRemoval(memberKey, profName, newLastUpdate)
     entry.professions[profName] = nil
     entry.dropped = entry.dropped or {}
     entry.dropped[profName] = newLastUpdate
-    entry.lastUpdate = math.max(entry.lastUpdate or 0, newLastUpdate)
+    if advance then
+        entry.lastUpdate = math.max(entry.lastUpdate or 0, newLastUpdate)
+    end
     if GuildCrafts.Tooltip then
         GuildCrafts.Tooltip:InvalidateIndex()
     end
@@ -2398,8 +2459,8 @@ function Data:PruneRoster()
         and memberKey ~= localPlayerKey
         and type(entry) == "table"
         and not entry._tombstone
-        and entry.lastUpdate and entry.lastUpdate > 0
-        and (now - entry.lastUpdate) > INACTIVE_MEMBER_THRESHOLD
+        and entry.lastUpdate and LastActive(entry) > 0
+        and (now - LastActive(entry)) > INACTIVE_MEMBER_THRESHOLD
         and rosterKeys[memberKey] then
             gdb[memberKey] = nil
             inactivePruned = inactivePruned + 1
@@ -2426,12 +2487,13 @@ function Data:PruneRoster()
 
     -- Prune legacy entries with no scan timestamp (lastUpdate nil or 0)
     -- Skip the local player — we're always authoritative for our own data
+    -- Revision 0 with recipes is a partial copy from a delta, waiting for a pull (H22).
     local legacyPruned = 0
     for memberKey, entry in pairs(gdb) do
         if type(memberKey) == "string"
         and memberKey ~= localPlayerKey
         and type(entry) == "table"
-        and (not entry.lastUpdate or entry.lastUpdate == 0) then
+        and (not entry.lastUpdate or (entry.lastUpdate == 0 and not HasRecipeContent(entry))) then
             gdb[memberKey] = nil
             legacyPruned = legacyPruned + 1
         end
