@@ -286,6 +286,56 @@ test("a resolved sender can't claim another GUID in HELLO, HEARTBEAT or SYNC_REQ
     assert(Comms.addonUsers[motiv], "matching HELLO dropped")
 end)
 
+-- Kuw's stored entry before anyone tries to change it.
+local function kuwAlchemy()
+    local gdb = Data:GetGuildDB()
+    gdb[kuw] = { lastUpdate = 500, professions = { Alchemy = { lastUpdate = 500, recipes = { [1] = { name = "Old" } } } } }
+    return gdb[kuw]
+end
+
+test("H23: a DELTA_UPDATE for another member is refused for add, touch and remove_profession", function()
+    local entry = kuwAlchemy()
+    receive("Motiv Hysteria", "DELTA_UPDATE", { type = "add", member = kuw, profession = "Alchemy",
+        recipes = { [2] = { name = "Forged" } }, lastUpdate = 600, dropped = 0 })
+    receive("Motiv Hysteria", "DELTA_UPDATE", { type = "touch", member = kuw, profession = "Alchemy",
+        lastUpdate = 700 })
+    receive("Motiv Hysteria", "DELTA_UPDATE", { type = "remove_profession", member = kuw,
+        profession = "Alchemy", lastUpdate = 800, x = 1 })
+    local alchemy = entry.professions.Alchemy
+    assert(alchemy and alchemy.recipes[1], "forged removal applied")
+    assert(alchemy.recipes[2] == nil, "forged recipe added")
+    assert(entry.lastUpdate == 500 and alchemy.lastUpdate == 500, "forged revision applied")
+    assert(entry.dropped == nil, "forged drop recorded")
+    assert(Comms.deltaSenderRefusals == 3, "refusals: " .. tostring(Comms.deltaSenderRefusals))
+    assert(Comms.senderFallbackRefusals == 0, "counted as a fallback refusal")
+    assert(wasLogged("Sender mismatch: DELTA_UPDATE from Motiv Hysteria (" .. motiv .. ") claims " .. kuw),
+        "mismatch not logged")
+end)
+
+test("H23: a cached sender's DELTA_UPDATE can't name another member", function()
+    coldStart()
+    local entry = kuwAlchemy()
+    receive("Alt One", "HELLO", { sender = "Player-4613-00000001", version = 3 })
+    receive("Alt One", "DELTA_UPDATE", { type = "add", member = kuw, profession = "Alchemy",
+        recipes = { [2] = { name = "Forged" } }, lastUpdate = 600, dropped = 0 })
+    assert(entry.professions.Alchemy.recipes[2] == nil, "forged recipe added")
+    assert(Comms.deltaSenderRefusals == 1, "refusals: " .. tostring(Comms.deltaSenderRefusals))
+end)
+
+test("H23: a member's own DELTA_UPDATEs still apply on peers", function()
+    receive("Motiv Hysteria", "DELTA_UPDATE", { type = "add", member = motiv, profession = "Alchemy",
+        recipes = { [2] = { name = "Elixir" } }, lastUpdate = 600, dropped = 0 })
+    local entry = Data:GetGuildDB()[motiv]
+    assert(entry and entry.professions.Alchemy.recipes[2], "own recipe not added")
+    receive("Motiv Hysteria", "DELTA_UPDATE", { type = "touch", member = motiv, profession = "Alchemy",
+        lastUpdate = 700 })
+    assert(entry.lastUpdate == 700, "own touch not applied: " .. entry.lastUpdate)
+    receive("Motiv Hysteria", "DELTA_UPDATE", { type = "remove_profession", member = motiv,
+        profession = "Alchemy", lastUpdate = 800, x = 1 })
+    assert(entry.professions.Alchemy == nil and entry.dropped.Alchemy == 800, "own drop not applied")
+    assert(Comms.deltaSenderRefusals == 0, "refusals: " .. tostring(Comms.deltaSenderRefusals))
+end)
+
 test("a revoked false claim doesn't come back on the next HELLO", function()
     coldStart()
     local claimed = "Player-4613-00000001"
