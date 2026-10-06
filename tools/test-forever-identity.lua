@@ -137,6 +137,31 @@ test("roster pruning marks only non-roster keys absent", function()
     assert(gdb[me]._absentSince == nil, "self marked absent")
 end)
 
+test("H22: pruning keeps a partial copy a delta left at revision 0", function()
+    local gdb = Data:GetGuildDB()
+    gdb[me] = { lastUpdate = 10, professions = {} }
+    gdb[motiv] = { lastUpdate = 0, professions = { Alchemy = { lastUpdate = 900, recipes = { [1] = { name = "New" } } } } }
+    gdb[kuw] = { lastUpdate = 0, professions = {} }
+    Data:PruneRoster()
+    assert(gdb[motiv] and gdb[motiv].professions.Alchemy.recipes[1], "partial copy pruned")
+    assert(gdb[kuw] == nil, "empty revision-0 entry kept")
+end)
+
+test("H22: inactive pruning counts a fresh delta kept below an old revision", function()
+    now = now + 100 * 86400
+    local old, gdb = now - 50 * 86400, Data:GetGuildDB()
+    gdb[me] = { lastUpdate = now, professions = {} }
+    gdb[motiv] = { lastUpdate = old, professions = { Alchemy = { lastUpdate = now, recipes = { [1] = {} } } } }
+    gdb[kuw] = { lastUpdate = old, professions = { Alchemy = { lastUpdate = old, recipes = { [1] = {} } } } }
+    Data:PruneRoster()
+    assert(gdb[motiv], "entry with a fresh delta pruned as inactive")
+    assert(gdb[kuw] == nil, "inactive entry kept")
+    -- A partial copy at revision 0 that never got repaired ages out the same way.
+    gdb[kuw] = { lastUpdate = 0, professions = { Alchemy = { lastUpdate = old, recipes = { [1] = {} } } } }
+    Data:PruneRoster()
+    assert(gdb[kuw] == nil, "stale partial copy kept")
+end)
+
 test("HELLO from an unresolved sender is keyed by its payload GUID", function()
     coldStart()
     receive("Kuw Pal", "HELLO", { sender = kuw, version = 3 })
@@ -847,6 +872,146 @@ test("election: the DR changes hands and back, and every client follows", functi
     sim:login("Ari Ash")
     sim:advance(120)
     sim:assertAgreed("Ari Ash")
+end)
+
+----------------------------------------------------------------------
+-- Recipe deltas across several clients (H22, #104)
+----------------------------------------------------------------------
+
+-- name opens its profession window with recipeIDs learned under prof, and the real scan runs.
+local function learn(sim, name, prof, ...)
+    local ids = { ... }
+    C_TradeSkillUI = {
+        GetBaseProfessionInfo = function() return { professionName = prof, skillLevel = 1, maxSkillLevel = 75 } end,
+        GetAllRecipeIDs = function() return ids end,
+        GetRecipeInfo = function(id) return { learned = true, name = "Recipe " .. id } end,
+    }
+    local node = sim.byName[name]
+    activeNode = node
+    now = now + 1
+    node.addon.Data:ScanTradeSkillModern()
+    activeNode = nil
+    C_TradeSkillUI = nil
+    sim:flush()
+end
+
+-- name's stored copy of owner's recipes under prof (recipe IDs), and its revision.
+local function holds(sim, name, owner, prof)
+    local node = sim.byName[name]
+    local entry = node.addon.Data:GetGuildDB()[sim.byName[owner].guid]
+    local ids = {}
+    for key in pairs(entry and entry.professions and entry.professions[prof] and entry.professions[prof].recipes or {}) do
+        ids[#ids + 1] = -key
+    end
+    table.sort(ids)
+    return table.concat(ids, ","), entry and entry.lastUpdate
+end
+
+local function ownRevision(sim, name)
+    local node = sim.byName[name]
+    return node.addon.Data:GetGuildDB()[node.guid].lastUpdate
+end
+
+local function pausable(sim, name)
+    local state = { paused = false }
+    sim.byName[name].addon.SyncPausePolicy = { ShouldPause = function() return state.paused end }
+    return state
+end
+
+local function syncRequests(sim, name, since)
+    local n = 0
+    for _, s in ipairs(sim.sends) do
+        if s.from == name and s.t == "SYNC_REQUEST" and s.at >= since then n = n + 1 end
+    end
+    return n
+end
+
+test("delta H22: a peer that missed T1 has T1's recipes after T2", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    learn(sim, "Bel Birch", "Alchemy", 300)
+    sim:partition("Bel Birch", "Cid Cedar", true)
+    learn(sim, "Bel Birch", "Alchemy", 300, 301)
+    sim:partition("Bel Birch", "Cid Cedar", false)
+    learn(sim, "Bel Birch", "Alchemy", 300, 301, 302)
+    sim:advance(30)
+    local recipes, revision = holds(sim, "Cid Cedar", "Bel Birch", "Alchemy")
+    assert(recipes == "300,301,302", "Cid holds " .. recipes)
+    assert(revision == ownRevision(sim, "Bel Birch"), "Cid's revision " .. tostring(revision))
+end)
+
+test("delta H22: a peer with no entry pulls the member's other professions", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    learn(sim, "Bel Birch", "Alchemy", 300, 301)
+    sim.byName["Cid Cedar"].addon.Data:GetGuildDB()[bel] = nil
+    learn(sim, "Bel Birch", "Cooking", 400)
+    sim:advance(30)
+    assert(holds(sim, "Cid Cedar", "Bel Birch", "Alchemy") == "300,301", "Alchemy not pulled")
+    local recipes, revision = holds(sim, "Cid Cedar", "Bel Birch", "Cooking")
+    assert(recipes == "400" and revision == ownRevision(sim, "Bel Birch"), "Cooking " .. recipes)
+end)
+
+test("delta H22: a change the owner made while paused reaches everyone at its next sync", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    local belPause = pausable(sim, "Bel Birch")
+    learn(sim, "Bel Birch", "Alchemy", 300)
+    local before = ownRevision(sim, "Bel Birch")
+    belPause.paused = true
+    learn(sim, "Bel Birch", "Alchemy", 300, 301)
+    belPause.paused = false
+    local since = now
+    learn(sim, "Bel Birch", "Alchemy", 300, 301, 302)
+    sim:advance(30)
+    -- The DR missed 301 too, so nobody can serve it until Bel syncs (the DR-pull gap, #15).
+    for _, name in ipairs({ "Ari Ash", "Cid Cedar" }) do
+        local recipes, revision = holds(sim, name, "Bel Birch", "Alchemy")
+        assert(recipes == "300,302", name .. " holds " .. recipes)
+        assert(revision == before, name .. " moved past the missed change to " .. tostring(revision))
+    end
+    assert(syncRequests(sim, "Cid Cedar", since) == 1, "Cid sent " .. syncRequests(sim, "Cid Cedar", since))
+    syncChain(sim, "Bel Birch")
+    syncChain(sim, "Cid Cedar")
+    for _, name in ipairs({ "Ari Ash", "Cid Cedar" }) do
+        assert(holds(sim, name, "Bel Birch", "Alchemy") == "300,301,302", name .. " never caught up")
+    end
+end)
+
+test("delta H22: a paused peer's pull waits for the pause to end", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    local cidPause = pausable(sim, "Cid Cedar")
+    learn(sim, "Bel Birch", "Alchemy", 300)
+    cidPause.paused = true  -- in an instance, where GUILD messages don't arrive
+    sim:partition("Bel Birch", "Cid Cedar", true)
+    learn(sim, "Bel Birch", "Alchemy", 300, 301)
+    sim:partition("Bel Birch", "Cid Cedar", false)
+    learn(sim, "Bel Birch", "Alchemy", 300, 301, 302)
+    sim:advance(30)
+    assert(holds(sim, "Cid Cedar", "Bel Birch", "Alchemy") == "300,302", "Cid pulled while paused")
+    cidPause.paused = false
+    sim:advance(30)
+    assert(holds(sim, "Cid Cedar", "Bel Birch", "Alchemy") == "300,301,302", "Cid never pulled")
+end)
+
+test("delta H22: deltas from a client without base stay behind until its next sync", function()
+    local sim = guild("Ari Ash", "Bel Birch", "Cid Cedar")
+    local belComms = sim.byName["Bel Birch"].Comms
+    local send = belComms.SendMessage
+    belComms.SendMessage = function(self, msgType, payload, ...)
+        if msgType == "DELTA_UPDATE" then payload.base = nil end
+        return send(self, msgType, payload, ...)
+    end
+    learn(sim, "Bel Birch", "Alchemy", 300)
+    syncChain(sim, "Bel Birch")
+    sim:partition("Bel Birch", "Cid Cedar", true)
+    learn(sim, "Bel Birch", "Alchemy", 300, 301)
+    sim:partition("Bel Birch", "Cid Cedar", false)
+    learn(sim, "Bel Birch", "Alchemy", 300, 301, 302)
+    sim:advance(30)
+    local recipes, revision = holds(sim, "Cid Cedar", "Bel Birch", "Alchemy")
+    assert(recipes == "300,302", "Cid holds " .. recipes)
+    assert(revision < ownRevision(sim, "Bel Birch"), "a delta without base moved Cid's revision")
+    syncChain(sim, "Bel Birch")
+    syncChain(sim, "Cid Cedar")
+    assert(holds(sim, "Cid Cedar", "Bel Birch", "Alchemy") == "300,301,302", "Cid never caught up")
 end)
 
 local failed = 0

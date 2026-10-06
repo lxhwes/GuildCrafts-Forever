@@ -159,6 +159,31 @@ GUILD, so this section says nothing about WHISPER.
 **Fail:** P3 prints nothing, or P4 shows a different count. P3 prints the sender after it has
 been resolved to a GUID, so it should equal A's key from S1.
 
+### M — A missed recipe update is repaired (H22)
+
+Checks that B, after missing one of A's recipe updates, gets it back when A's next update
+arrives, without a relog. A must be LOW, so A answers B's sync request. Needs two recipes A
+can learn, one at a time.
+
+| Step | Who | Do | Expect |
+|---|---|---|---|
+| M1 | both | `/gc debug` | `Debug mode: ON` |
+| M2 | B | Enter a dungeon. Wait 15s | `[debug] SyncPausePolicy: inside instance — sync paused` |
+| M3 | A | Outside, learn the first recipe and open that profession window | `Scanned <Prof>: 1 new recipe(s) found.`, `[debug] Broadcast DELTA_UPDATE (add) for <A> <Prof>` |
+| M4 | B | Watch chat | Nothing from A. If B prints `[debug] DELTA_UPDATE (add) from <A>`, GUILD messages reach the instance (that answers Q8) and B missed nothing. Then run M again with A inside the dungeon at M3 and B outside: A's M3 prints `BroadcastNewRecipes suppressed (SyncPausePolicy)` instead |
+| M5 | B | Leave the dungeon. Wait 20s | `[debug] SyncPausePolicy: instance grace expired — sync resumed` |
+| M6 | A | Learn the second recipe and open that profession window | As M3 |
+| M7 | B | Watch chat for 15s | `[debug] DELTA_UPDATE (add) from <A> for <A>`, `[debug] Missing changes for <A> before base <n> — sync pull in <s>s`, then `Sent SYNC_REQUEST (retry=0)` and `Received SYNC_RESPONSE chunk 1 / 1 from <A> — merged: true` |
+| M8 | B | `/gc`, then `<Prof>`, then A's name. `/gc dump` | Both new recipes, with no `/reload` since M2 |
+
+**Fail:** M8 lacks the first recipe after 2 minutes, or M7 has no `Missing changes` line.
+
+If B is LOW, B is the DR and has nobody to pull from. M7 then prints `DR keeps <A> behind base
+<n> until its next sync`, and the first recipe only arrives after A's `/reload`. That's a known
+gap (H12, "A returning DR may get no sync").
+
+Evidence: B's debug lines from M4 to M7, A's M3 and M6 lines, and B's M8 dump.
+
 ### W — WHISPER reach
 
 Every sync reply goes by WHISPER: SYNC_RESPONSE and SYNC_PULL from the DR, SYNC_PUSH and

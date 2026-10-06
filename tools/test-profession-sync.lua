@@ -9,6 +9,7 @@ local playerKey = "Owner-Realm"
 local skillLines = {}
 local debugs = {}
 local timers = {}
+local commsTimers = {}
 
 time = function() return now end
 GetServerTime = function() return serverNow end
@@ -92,7 +93,13 @@ local function reset()
     classicSkillLines()
     Data._currentProfs, Data._dropHinted, Data._detectRetries = nil, nil, nil
     Data._scanRetries, Data._scanRetryPending = nil, nil
-    debugs, timers = {}, {}
+    debugs, timers, commsTimers = {}, {}, {}
+    Comms.ScheduleTimer = function(_, fn, delay)
+        commsTimers[#commsTimers + 1] = { fn = fn, delay = delay }
+        return commsTimers[#commsTimers]
+    end
+    Comms.CancelTimer = function(_, handle) if handle then handle.cancelled = true end end
+    Comms._recheckAfterSync = {}
     Data.db.global = {}
     C_TradeSkillUI = nil
     C_SpellBook = nil
@@ -178,8 +185,8 @@ end)
 test("unrelated newer delta cannot block an older profession removal", function()
     playerKey = "Peer-Realm"
     db["Owner-Realm"] = entry({ Alchemy = profession(3), Cooking = profession(3) }, 800)
-    Data:MergeDelta("Owner-Realm", "Cooking", 400, { name = "Food" }, 1100)
-    Data:MergeProfessionRemoval("Owner-Realm", "Alchemy", 1000)
+    Data:MergeDelta("Owner-Realm", "Cooking", 400, { name = "Food" }, 1100, nil, true)
+    Data:MergeProfessionRemoval("Owner-Realm", "Alchemy", 1000, true)
     assert(not db["Owner-Realm"].professions.Alchemy)
     assert(db["Owner-Realm"].lastUpdate == 1100)
 end)
@@ -811,8 +818,8 @@ end)
 test("stamps within the tolerance are accepted unchanged and keep their order", function()
     playerKey = "Peer-Realm"
     db["Owner-Realm"] = entry({ Alchemy = profession(3, 0, 900) }, 900)
-    local function removal() Data:MergeProfessionRemoval("Owner-Realm", "Alchemy", 2200) end
-    local function relearn() Data:MergeDelta("Owner-Realm", "Alchemy", 500, { name = "New" }, 2201, 2200) end
+    local function removal() Data:MergeProfessionRemoval("Owner-Realm", "Alchemy", 2200, true) end
+    local function relearn() Data:MergeDelta("Owner-Realm", "Alchemy", 500, { name = "New" }, 2201, 2200, true) end
     removal(); relearn()
     assert(count(db["Owner-Realm"].professions.Alchemy) == 3, "applied while far ahead")
     serverNow = 1950
@@ -851,6 +858,247 @@ test("clients without GetServerTime stamp with the local clock", function()
     now = serverNow - 1200
     assert(classic:MergeIncoming({ ["Other-Realm"] = entry({ Alchemy = profession(2, 0, serverNow) }, serverNow) }),
         "slow fallback clock refused a server-stamped snapshot")
+end)
+
+-- H22 (#104): a delta only moves a member's revision on a peer that holds its base.
+local function peerOf(revision, profs)
+    Comms:OnInitialize()
+    Comms.myRole = "OTHER"
+    playerKey = "Peer-Realm"
+    db["Owner-Realm"] = entry(profs or { Alchemy = profession(3, 0, revision) }, revision)
+    return db["Owner-Realm"]
+end
+local function add(recipeKey, revision, base)
+    Comms:HandleDeltaUpdate({ type = "add", member = "Owner-Realm", profession = "Alchemy",
+        recipes = { [recipeKey] = { name = "New" } }, lastUpdate = revision, dropped = 0, base = base }, "Owner-Realm")
+end
+local function pulls()
+    local n = 0
+    for _, handle in ipairs(commsTimers) do
+        if not handle.cancelled and type(handle.fn) == "function" then
+            assert(handle.delay >= 1 and handle.delay <= 5, "pull jitter " .. handle.delay)
+            n = n + 1
+        end
+    end
+    return n
+end
+
+test("H22: a delta at the peer's base advances the member revision", function()
+    local stored = peerOf(800)
+    add(10, 900, 800)
+    assert(stored.professions.Alchemy.recipes[10], "recipe not merged")
+    assert(stored.lastUpdate == 900, "revision " .. stored.lastUpdate)
+    assert(pulls() == 0, "pulled while current")
+end)
+
+test("H22: a peer ahead of the base also advances", function()
+    -- The owner's no-change scans move its revision without a delta; a full sync can carry that.
+    local stored = peerOf(850)
+    add(10, 900, 800)
+    assert(stored.lastUpdate == 900, "revision " .. stored.lastUpdate)
+    assert(pulls() == 0, "pulled while current")
+end)
+
+test("H22: a peer behind the base merges the recipes, keeps its revision and pulls", function()
+    local stored = peerOf(700)
+    add(10, 900, 800)
+    assert(stored.professions.Alchemy.recipes[10], "recipe not merged")
+    assert(stored.lastUpdate == 700, "revision moved to " .. stored.lastUpdate)
+    assert(stored.professions.Alchemy.lastUpdate == 900, "profession revision not moved")
+    assert(pulls() == 1, "pulls: " .. pulls())
+    assert(Data:GetVersionVector()["Owner-Realm"] == 700, "vector hides the gap")
+end)
+
+test("H22: a delta without base never advances the member revision", function()
+    local stored = peerOf(800)
+    add(10, 900)
+    assert(stored.professions.Alchemy.recipes[10], "recipe not merged")
+    assert(stored.lastUpdate == 800, "revision moved to " .. stored.lastUpdate)
+    assert(pulls() == 1, "pulls: " .. pulls())
+end)
+
+test("H22: an older repair snapshot keeps recipes from a newer delta", function()
+    -- Missed 800, got 900; the DR missed 900 and answers with its 800 snapshot.
+    local stored = peerOf(700)
+    add(10, 900, 800)
+    assert(Data:MergeIncoming({ ["Owner-Realm"] = entry({ Alchemy = profession(4, 0, 800) }, 800) }), "snapshot refused")
+    stored = db["Owner-Realm"]
+    local alchemy = stored.professions.Alchemy
+    assert(count(alchemy) == 5 and alchemy.recipes[4] and alchemy.recipes[10], "recipes: " .. count(alchemy))
+    assert(stored.lastUpdate == 800 and alchemy.lastUpdate == 900, "revisions " .. stored.lastUpdate .. "/" .. alchemy.lastUpdate)
+end)
+
+test("H22: merging two partial copies keeps the newer profession revision", function()
+    local stored = peerOf(700, { Alchemy = profession(1, 0, 900) })
+    local incoming = entry({ Alchemy = profession(1, 10, 1000) }, 800)
+    assert(Data:MergeIncoming({ ["Owner-Realm"] = incoming }), "snapshot refused")
+    stored = db["Owner-Realm"]
+    assert(count(stored.professions.Alchemy) == 2, "recipes: " .. count(stored.professions.Alchemy))
+    assert(stored.professions.Alchemy.lastUpdate == 1000, "revision " .. stored.professions.Alchemy.lastUpdate)
+end)
+
+test("H22: an older tombstone can't delete a member a newer delta brought back", function()
+    peerOf(700)
+    db["Owner-Realm"] = { _tombstone = true, lastUpdate = 800 }
+    add(10, 900, 850)
+    assert(db["Owner-Realm"].professions.Alchemy.recipes[10], "delta not merged")
+    Data:MergeIncoming({ ["Owner-Realm"] = { _tombstone = true, lastUpdate = 800 } })
+    assert(not db["Owner-Realm"]._tombstone, "older tombstone deleted newer recipes")
+end)
+
+test("H22: a peer with no entry merges the delta at revision 0 and pulls", function()
+    peerOf(800)
+    db["Owner-Realm"] = nil
+    add(10, 900, 800)
+    local stored = db["Owner-Realm"]
+    assert(stored and stored.professions.Alchemy.recipes[10], "recipe not merged")
+    assert(stored.lastUpdate == 0, "revision " .. stored.lastUpdate)
+    assert(pulls() == 1, "pulls: " .. pulls())
+end)
+
+test("H22: a member's first recipes need no base", function()
+    peerOf(800)
+    db["Owner-Realm"] = nil
+    add(10, 900, 0)
+    assert(db["Owner-Realm"].lastUpdate == 900, "revision " .. db["Owner-Realm"].lastUpdate)
+    assert(pulls() == 0, "pulled a member with nothing else to send")
+end)
+
+test("H22: a touch advances the member revision only from its base", function()
+    local stored = peerOf(800)
+    local function touch(revision, base)
+        Comms:HandleDeltaUpdate({ type = "touch", member = "Owner-Realm", profession = "Alchemy",
+            lastUpdate = revision, base = base }, "Owner-Realm")
+    end
+    touch(900, 800)
+    assert(stored.lastUpdate == 900 and pulls() == 0, "touch at base not applied")
+    touch(1000, 950)
+    assert(stored.lastUpdate == 900, "touch past a missed change moved to " .. stored.lastUpdate)
+    assert(stored.professions.Alchemy.lastUpdate == 1000, "profession revision not moved")
+    assert(pulls() == 1, "pulls: " .. pulls())
+    commsTimers = {}
+    touch(1100)
+    assert(stored.lastUpdate == 900 and pulls() == 1, "touch without base moved the revision")
+end)
+
+test("H22: a removal advances the member revision only from its base", function()
+    local stored = peerOf(800, { Alchemy = profession(3, 0, 800), Cooking = profession(3, 0, 800) })
+    local function remove(prof, revision, base)
+        Comms:HandleDeltaUpdate({ type = "remove_profession", member = "Owner-Realm", profession = prof,
+            lastUpdate = revision, x = 1, base = base }, "Owner-Realm")
+    end
+    remove("Alchemy", 900, 800)
+    assert(not stored.professions.Alchemy and stored.lastUpdate == 900 and pulls() == 0, "removal at base")
+    remove("Cooking", 1000, 950)
+    assert(not stored.professions.Cooking and stored.dropped.Cooking == 1000, "removal not applied")
+    assert(stored.lastUpdate == 900, "removal past a missed change moved to " .. stored.lastUpdate)
+    assert(pulls() == 1, "pulls: " .. pulls())
+end)
+
+test("H22: a pull asked for mid-sync runs after it if that sync didn't cover the delta", function()
+    local stored = peerOf(700)
+    Comms.syncPending, Comms._postSyncHelloDone = true, true
+    add(10, 900, 800)
+    assert(pulls() == 0, "scheduled a second request mid-sync")
+    stored.lastUpdate = 800  -- the in-flight snapshot predates the delta
+    Comms:_FinalizeSyncResponse()
+    assert(pulls() == 1, "pulls after the sync: " .. pulls())
+end)
+
+test("H22: no follow-up pull when the sync in flight already covered the delta", function()
+    local stored = peerOf(700)
+    Comms.syncPending, Comms._postSyncHelloDone = true, true
+    add(10, 900, 800)
+    stored.lastUpdate = 900
+    Comms:_FinalizeSyncResponse()
+    assert(pulls() == 0, "pulls after the sync: " .. pulls())
+    Comms:_FinalizeSyncResponse()
+    assert(pulls() == 0, "a later sync pulled for the same delta")
+end)
+
+test("H22: the DR keeps a missed base but has nobody to pull from", function()
+    local stored = peerOf(700)
+    Comms.myRole = "DR"
+    add(10, 900, 800)
+    assert(stored.lastUpdate == 700, "revision moved to " .. stored.lastUpdate)
+    assert(pulls() == 0, "DR scheduled a request it would skip")
+    assert(logged("DR keeps"), "DR gap not logged")
+end)
+
+-- Owner side: base is the revision of the owner's previous recipe change.
+local function learnAlchemy(ids, skill)
+    tradeSkill({
+        GetBaseProfessionInfo = function()
+            return { professionName = "Alchemy", skillLevel = skill or 1, maxSkillLevel = 75 }
+        end,
+        GetAllRecipeIDs = function() return ids end,
+        GetRecipeInfo = function(id) return { learned = true, name = "Recipe " .. id } end,
+    })
+    serverNow = serverNow + 60
+    now = serverNow
+    Data:ScanTradeSkillModern()
+end
+local function lastDelta(kind)
+    local found
+    for _, message in ipairs(sent) do
+        if message.kind == "DELTA_UPDATE" and message.payload.type == kind then found = message.payload end
+    end
+    return found
+end
+
+test("H22: a member's first scan sends base 0", function()
+    learnAlchemy({ 201 })
+    assert(lastDelta("add").base == 0, "base " .. tostring(lastDelta("add").base))
+end)
+
+test("H22: no-change scans and skill-ups don't move the base", function()
+    -- Saved before H22, so the first base falls back to the revision.
+    db[playerKey] = entry({ Alchemy = profession(1, 500, 900) }, 900)
+    learnAlchemy({ 201 })
+    local first = lastDelta("add")
+    assert(first.base == 900, "first base " .. tostring(first.base))
+    learnAlchemy({ 201 }, 2)  -- skill-up, no new recipe
+    learnAlchemy({ 201 }, 2)  -- window reopened, nothing new
+    assert(db[playerKey].lastUpdate > first.lastUpdate, "no-change scan didn't refresh the revision")
+    learnAlchemy({ 201, 202 }, 2)
+    local second = lastDelta("add")
+    assert(second.base == first.lastUpdate, "second base " .. second.base .. ", first revision " .. first.lastUpdate)
+end)
+
+test("H22: a base saved before H22 stays put through no-change scans", function()
+    -- Modern scans key a recipe with no output item by its negated ID.
+    db[playerKey] = entry({ Alchemy = { lastUpdate = 900, recipes = { [-201] = { name = "Recipe 201" } } } }, 900)
+    learnAlchemy({ 201 })  -- nothing new
+    assert(db[playerKey].lastUpdate > 900, "no-change scan didn't refresh the revision")
+    learnAlchemy({ 201, 202 })
+    assert(lastDelta("add").base == 900, "base moved to " .. tostring(lastDelta("add").base))
+end)
+
+test("H22: a delta suppressed by a pause still moves the base", function()
+    db[playerKey] = entry({ Alchemy = profession(0, 0, 900) }, 900)
+    learnAlchemy({ 201 })
+    Pause:OnCombatStart()
+    learnAlchemy({ 201, 202 })
+    local suppressed = db[playerKey].lastUpdate
+    Pause:OnCombatEnd()
+    timers[#timers].fn()
+    learnAlchemy({ 201, 202, 203 })
+    assert(lastDelta("add").base == suppressed, "base skipped the paused change")
+end)
+
+test("H22: /gc drop and touch carry the recipe base", function()
+    db[playerKey] = entry({ Alchemy = profession(1, 200, 900), Cooking = profession(3) }, 900)
+    learnAlchemy({ 201 })
+    local added = lastDelta("add").lastUpdate
+    known = { indices = { 1 }, [1] = "Alchemy" }
+    Data:DropProfession("cooking")
+    local removal = lastDelta("remove_profession")
+    assert(removal.base == added, "removal base " .. tostring(removal.base))
+    Comms._lastTouchBroadcast = nil
+    serverNow = serverNow + 30 * 86400
+    learnAlchemy({ 201 })
+    local touch = lastDelta("touch")
+    assert(touch and touch.base == removal.lastUpdate, "touch base " .. tostring(touch and touch.base))
 end)
 
 -- H19 (#44): a paused DR leaves its sync queue alone until the pause lifts (F29).
