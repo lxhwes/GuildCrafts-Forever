@@ -323,15 +323,16 @@ test("H23: a cached sender's DELTA_UPDATE can't name another member", function()
 end)
 
 test("H23: a member's own DELTA_UPDATEs still apply on peers", function()
+    -- base as Motiv's client sends it (H22): its first recipes, then the add's revision.
     receive("Motiv Hysteria", "DELTA_UPDATE", { type = "add", member = motiv, profession = "Alchemy",
-        recipes = { [2] = { name = "Elixir" } }, lastUpdate = 600, dropped = 0 })
+        recipes = { [2] = { name = "Elixir" } }, lastUpdate = 600, dropped = 0, base = 0 })
     local entry = Data:GetGuildDB()[motiv]
     assert(entry and entry.professions.Alchemy.recipes[2], "own recipe not added")
     receive("Motiv Hysteria", "DELTA_UPDATE", { type = "touch", member = motiv, profession = "Alchemy",
-        lastUpdate = 700 })
+        lastUpdate = 700, base = 600 })
     assert(entry.lastUpdate == 700, "own touch not applied: " .. entry.lastUpdate)
     receive("Motiv Hysteria", "DELTA_UPDATE", { type = "remove_profession", member = motiv,
-        profession = "Alchemy", lastUpdate = 800, x = 1 })
+        profession = "Alchemy", lastUpdate = 800, x = 1, base = 600 })
     assert(entry.professions.Alchemy == nil and entry.dropped.Alchemy == 800, "own drop not applied")
     assert(Comms.deltaSenderRefusals == 0, "refusals: " .. tostring(Comms.deltaSenderRefusals))
 end)
