@@ -7,7 +7,7 @@
 #   backticked commit on main, "migration-forever.md YYYY-MM-DD", "decisions log YYYY-MM-DD",
 #   a workflow run ID or URL, or a comment link
 # - every closed issue was closed by a PR or commit, or carries an evidence comment; a
-#   not-planned close carries a reason; a close by a PR (or its commit) whose Tracking block
+#   not-planned close carries a reason comment written at the close; a close by a PR (or its commit) whose Tracking block
 #   doesn't list the issue under Finishes is flagged (#15)
 # - merged PRs whose Tracking block hasn't been applied (no "Tracking applied" comment)
 # - open umbrellas whose sub-issues are all closed
@@ -53,8 +53,8 @@ else
       issues(first: 50, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes {
         number title state stateReason body milestone { title } labels(first: 20) { nodes { name } }
         subIssuesSummary { total completed }
-        comments(first: 100) { totalCount nodes { body } }
-        timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer {
+        comments(first: 100) { totalCount nodes { body createdAt } }
+        timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { createdAt closer {
           __typename ... on PullRequest { number body }
           ... on Commit { oid associatedPullRequests(first: 3) { nodes { number body } } } } } } } } } } }'
     # shellcheck disable=SC2016
@@ -146,7 +146,10 @@ drift=$(jq -r -n --arg rows "$rows" --arg repo "$repo" \
           else ($c.associatedPullRequests.nodes // []) end ) as $closers
       | ( [$i.comments.nodes[].body | select(evidence)] | length > 0 ) as $commented
       | if $i.stateReason == "NOT_PLANNED" then
-          (if ($i.comments.nodes | length) == 0 then "#\($i.number): closed as not planned with no reason" else empty end)
+          # the reason is a comment written within an hour before the close, or after it
+          ( ($i.timelineItems.nodes[0].createdAt // "1970-01-01T00:00:00Z" | fromdateiso8601 - 3600) as $since
+            | if any($i.comments.nodes[]; (.createdAt // "1970-01-01T00:00:00Z" | fromdateiso8601) >= $since) then empty
+              else "#\($i.number): closed as not planned with no reason comment at the close" end )
         else
           ( $closers[] | select(has_tracking(.) and ((finishes(.) | index($i.number)) | not))
             | "#\($i.number): closed by PR #\(.number), whose Tracking block does not list it under Finishes" ),

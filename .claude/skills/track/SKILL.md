@@ -27,17 +27,21 @@ For each PR the check lists as "Tracking block not applied":
 1. Read the block: `gh pr view N --json body,mergeCommit`. Lines are `Finishes:`, `Progress:`,
    `Evidence-only:`. An item is `#N` (whole issue), `#N F30` (the checklist line holding that
    finding ID), or `#N "text"` (the line containing that text).
-2. For each item, skip it if the target issue already has a comment starting
-   `Tracking: PR #<this PR>`, since a retry may have applied it.
+2. For each item, check whether a retry already applied it. Skip it only if the target issue has
+   a comment exactly `Tracking: PR #<P> <action> <item>.` for this action and item, and the
+   change it records is visible: the box is ticked, the issue is closed, or the line cites #P.
+   Another item from the same PR on the same issue doesn't count.
 3. Resolve the item to exactly one line, or to the whole issue. If zero or several lines match,
    skip it and add it to the "unmatched" list.
 4. Apply it:
-   - `Finishes` + whole issue: comment `Tracking: PR #P finishes this (<merge sha>).`, then
-     `gh issue close N --reason completed`.
+   - `Finishes` + whole issue: close with `gh issue close N --reason completed`, then comment
+     `Tracking: PR #P finishes #N.` Add the merge sha after it.
    - `Finishes` + line: change `- [ ]` to `- [x]` and append ` (#P)`. Then comment
-     `Tracking: PR #P ticked "<first 60 chars>".`
+     `Tracking: PR #P finishes <item>.` Here `<item>` is the finding ID or the quoted text from the block.
    - `Progress`: comment `Tracking: PR #P progresses <item>.` Don't tick anything.
-   - `Evidence-only`: append ` (#P)` to the line. Then comment `Tracking: PR #P cited on "<…>".`
+   - `Evidence-only`: append ` (#P)` to the line. Then comment `Tracking: PR #P cites <item>.`
+   Make the change first and write its marker comment after it. A marker then always means
+   the change happened.
    Edit bodies by fetching the current body, changing the one line, and writing it back with
    `gh issue edit N --body-file -`. Never write from a stale copy.
 5. If closing a sub-issue leaves its umbrella with every sub-issue closed, and the umbrella's

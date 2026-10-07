@@ -100,8 +100,15 @@ expect 1 "plan gate (Phase 1 — Hardening): ticked without evidence" "a plan ga
 clean; edit_issues '(.[] | select(.number == 1) | .comments) = {totalCount: 0, nodes: []}'
 expect 1 "#1: closed with no linked PR and no evidence comment" "a hand close with no evidence"
 
-clean; edit_issues '(.[] | select(.number == 1) | .comments) = {totalCount: 0, nodes: []} | (.[] | select(.number == 1) | .stateReason) = "NOT_PLANNED"'
-expect 1 "closed as not planned with no reason" "a not-planned close with no reason"
+notplanned='(.[] | select(.number == 1) | .stateReason) = "NOT_PLANNED" | (.[] | select(.number == 1) | .timelineItems) = {nodes: [{createdAt: "2026-10-04T12:00:00Z", closer: null}]}'
+clean; edit_issues "$notplanned"' | (.[] | select(.number == 1) | .comments) = {totalCount: 0, nodes: []}'
+expect 1 "closed as not planned with no reason" "a not-planned close with no comment"
+
+clean; edit_issues "$notplanned"' | (.[] | select(.number == 1) | .comments) = {totalCount: 1, nodes: [{body: "Looks good", createdAt: "2026-10-01T09:00:00Z"}]}'
+expect 1 "closed as not planned with no reason" "a not-planned close with only an older, unrelated comment"
+
+clean; edit_issues "$notplanned"' | (.[] | select(.number == 1) | .comments) = {totalCount: 1, nodes: [{body: "Rejected: GRO did not reproduce it", createdAt: "2026-10-04T11:59:30Z"}]}'
+expect 0 "0 drift" "a not-planned close with a reason written at the close"
 
 clean; edit_issues '(.[] | select(.number == 1) | .timelineItems) = {nodes: [{closer: {__typename: "Commit", oid: "abc", associatedPullRequests: {nodes: [{number: 10, body: "### Tracking\nFinishes: #3\nProgress: #1"}]}}}]}'
 expect 1 "#1: closed by PR #10, whose Tracking block does not list it under Finishes" "the #15 case: closed by a commit from a PR that doesn't finish it"
