@@ -116,6 +116,9 @@ expect 1 "#1: closed by PR #10, whose Tracking block does not list it under Fini
 clean; edit_issues '(.[] | select(.number == 1) | .timelineItems) = {nodes: [{closer: {__typename: "Commit", oid: "abc", associatedPullRequests: {nodes: [{number: 10, body: "### Tracking\nFinishes: #1"}]}}}]}'
 expect 0 "0 drift" "a close from a PR that finishes it"
 
+clean; edit_issues '(.[] | select(.number == 1) | .timelineItems) = {nodes: [{closer: {__typename: "Commit", oid: "abc", associatedPullRequests: {nodes: [{number: 10, body: "### Tracking\nFinishes: #1 F8, #3"}]}}}]}'
+expect 1 "#1: closed by PR #10, whose Tracking block does not list it under Finishes" "a close from a PR that only ticks a line in it"
+
 clean; edit_prs '(.[0].body) = "### Tracking\nFinishes: #3"'
 expect 1 "PR #10: Tracking block not applied" "a merged Tracking block not applied yet"
 

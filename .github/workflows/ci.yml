@@ -92,21 +92,3 @@ jobs:
 
       - name: Plan index regressions
         run: bash tools/test-check-plan-index.sh
-
-  # Reports drift between spec/forever-plan.md and the issues. Not required, and it never
-  # fails the run: issue state changes outside PRs, so drift isn't this PR's fault.
-  plan-index:
-    if: github.workflow == 'CI'
-    runs-on: ubuntu-24.04
-    continue-on-error: true
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Plan index
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash tools/check-plan-index.sh

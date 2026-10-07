@@ -106,8 +106,10 @@ drift=$(jq -r -n --arg rows "$rows" --arg repo "$repo" \
       or test("decisions log [0-9]{4}-[0-9]{2}-[0-9]{2}")
       or test("(^|[^0-9])[0-9]{10,12}([^0-9]|$)") or test("/actions/runs/[0-9]+")
       or test("issuecomment-[0-9]+");
+    # whole issues only: "#12" finishes #12, "#12 F8" or "#12 \"text\"" only ticks a line
     def finishes($pr):
-      ($pr.body // "") | [scan("(?im)^Finishes:(.*)$") | .[0] | scan("#([0-9]+)") | .[0] | tonumber];
+      ($pr.body // "") | [scan("(?im)^Finishes:(.*)$") | .[0] | split(",")[]
+        | gsub("^\\s+|\\s+$"; "") | select(test("^#[0-9]+$")) | .[1:] | tonumber];
     def has_tracking($pr): ($pr.body // "") | test("(?im)^### Tracking");
     def milestone_for($sect):
       if ($sect | test("^Phase [0-9]")) then ($sect | capture("^(?<p>Phase [0-9])").p)
