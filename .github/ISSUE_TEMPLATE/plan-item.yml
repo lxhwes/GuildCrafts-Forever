@@ -1,0 +1,46 @@
+name: Plan item
+description: A work item, sub-issue or question tracked in spec/forever-plan.md
+title: "<ID>: <title>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Title: `<ID>: <title>`. Plan items use their plan ID (`H25`, `Q9`). A sub-issue uses its
+        finding ID (`F7`, `C1/F3`) or, with no finding ID, its parent's ID plus a number (`H12.1`).
+
+        After creating it: set the phase milestone and labels, add a `wave-N` label in Phase 3,
+        link a sub-issue to its parent, and add the issue's row and `[#N]` link to the plan.
+  - type: input
+    id: source
+    attributes:
+      label: Plan link
+      description: Where in the plan this comes from, and the parent issue for a sub-issue.
+      placeholder: "From spec/forever-plan.md, Phase 3, wave 1. Sub-issue of #15 (H12)."
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What goes wrong for players or testers, and the evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings
+      description: One checkbox per finding, with file:line at a named commit.
+      placeholder: "- [ ] **F7**: RESUME duplicates transfers (`Comms.lua:1053` at `dc89970`)."
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: |
+        One checkbox per outcome. Tick a box only with its evidence on the same line:
+        a merged PR `(#95)`, a backticked commit on main, `migration-forever.md YYYY-MM-DD`
+        for an in-game check, a workflow run ID, or a link to the decision or comment.
+      placeholder: |
+        - [ ] Fixed, with a harness case
+        - [x] F29 fixed (#95)
+    validations:
+      required: true
