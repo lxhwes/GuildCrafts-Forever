@@ -17,6 +17,7 @@ gitc() { git -C "$repo" -c user.name=t -c user.email=t@t "$@"; }
 gitc init -q -b main
 mkdir -p "$repo/GuildCrafts/Modules"
 echo 'local a = 1' >"$repo/GuildCrafts/Modules/MinimapButton.lua"
+echo '.codex-review/' >"$repo/.gitignore"
 gitc add -A && gitc commit -q -m base
 gitc branch base
 gitc checkout -q -b feature/x
@@ -101,6 +102,12 @@ run --dry-run --task "$task"
 check "uncommitted changes refuse to review" 1 "uncommitted changes"
 
 gitc commit -q -am "feat(ui): second local"
+
+# Codex reads the worktree, so a file left out of the commits would be reviewed but not shipped.
+echo 'local c = 3' >"$repo/GuildCrafts/Modules/Untracked.lua"
+run --dry-run --task "$task"
+check "an untracked file refuses to review" 1 "uncommitted changes"
+rm "$repo/GuildCrafts/Modules/Untracked.lua"
 run --dry-run
 check "a missing task refuses to review" 1 "needs the original task"
 
@@ -162,6 +169,11 @@ seed_run1
 respond "$(result "" "$(prior "Purges on empty read" still-open)")"
 run --task "$task" --prior "$scratch/prior.md"
 check "a still-open high from run 1 blocks" 2 "still-open: Purges on empty read"
+
+seed_run1
+respond "$(result "" "$(prior "Purges on empty read" still-open),$(prior "Purges on empty read" resolved)")"
+run --task "$task" --prior "$scratch/prior.md"
+check "a still-open high listed twice still blocks" 2 "blocking: 1"
 
 seed_run1
 respond "$(result "" "$(prior Edge rebuttal-accepted)")"

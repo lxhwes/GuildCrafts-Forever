@@ -51,9 +51,10 @@ for src in "$issue" "$task_file" "$task"; do [[ -n $src ]] && sources=$((sources
 [[ -z $task_file || -f $task_file ]] || die "no such task file: $task_file"
 [[ -z $prior || -f $prior ]] || die "no such prior file: $prior"
 
-# Codex reads the files on disk, so they have to match the diff it's given.
-[[ -z $(git status --porcelain --untracked-files=no) ]] \
-    || die "uncommitted changes; commit them first so the diff matches the files"
+# Codex reads the files on disk, so they have to match the diff it's given. Untracked files
+# count too: Codex would review one the PR doesn't ship. Ignored files (.codex-review/) don't.
+[[ -z $(git status --porcelain) ]] \
+    || die "uncommitted changes or untracked files; commit or remove them so the diff matches the files"
 range=$base...HEAD
 [[ -n $(git diff --name-only "$range") ]] || die "no changes against base $base"
 
@@ -191,7 +192,10 @@ echo "codex-review: run $n -> $out"
 # A critical or high finding blocks while it's new, still open, or missing from prior.
 report=$(jq -r --argjson earlier "$earlier" '
     def blocks: .severity == "critical" or .severity == "high";
-    ([.prior[] | {key: .title, value: .status}] | from_entries) as $status
+    # a title listed more than once counts as still-open if any entry says so
+    ([.prior | group_by(.title)[] | {key: .[0].title,
+        value: (if any(.status == "still-open") then "still-open" else .[0].status end)}]
+      | from_entries) as $status
     | [$earlier[] | select(blocks) | .title as $t | ($status[$t] // "missing")
         | select(. == "still-open" or . == "missing") | {title: $t, status: .}] as $open
     | (([.findings[] | select(blocks)] | length) + ($open | length)) as $blocking
