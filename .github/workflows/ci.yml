@@ -92,3 +92,6 @@ jobs:
 
       - name: Plan index regressions
         run: bash tools/test-check-plan-index.sh
+
+      - name: Codex review script
+        run: bash tools/test-codex-review.sh

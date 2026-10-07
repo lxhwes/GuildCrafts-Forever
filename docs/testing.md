@@ -19,6 +19,7 @@ lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
 lua5.1 tools/test-tooltip-index.lua     # tooltip index rebuild debounce (F9)
 bash tools/test-release-preflight.sh     # release.yml publish refusals (H18), release notes (H20)
 lua5.1 tools/test-chat-links.lua        # chat links, [W] two-word whisper target (F25, F20)
+bash tools/test-codex-review.sh         # tools/codex-review.sh prompt, run cap and exit codes
 ```
 
 If `lua5.1` isn't on your PATH, Alex's PUC Lua 5.1.5 toolchain is at
