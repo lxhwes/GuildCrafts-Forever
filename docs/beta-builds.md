@@ -6,6 +6,14 @@ moved the pin and this repo reconciled afterwards. "Touches us" means a symbol i
 `.claude/forever-tools/watchlist.txt` or a `C_*` call under `GuildCrafts/`. A build that moved
 nothing gets an entry too: a gap here should mean "nobody checked", not "nothing happened".
 
+## 1.60.1.70245 — 2026-10-06
+
+Pin: `e3ecc27` → `15666a6`
+
+**Does not touch us**
+- Only `version.txt` changed. No file in the sparse set moved, and the Camelot TOC's
+  `## Interface: 16001` still matches.
+
 ## 1.60.1.70205 — 2026-10-04
 
 Pin: `9a789c0` → `e3ecc27`
