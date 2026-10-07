@@ -1,5 +1,18 @@
 {
   "enabledPlugins": {
     "forever-tools@forever-tools": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/tools/check-plan-index.sh\" --summary",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,0 +1,32 @@
+name: Plan index
+
+# Reports drift between spec/forever-plan.md and the issues (tools/check-plan-index.sh).
+# Advisory: issue state changes outside PRs, so drift isn't a PR's fault, and this isn't a
+# required check. Kept out of ci.yml because release.yml calls ci.yml with contents: write
+# only, and a called job can't ask for more than its caller grants. No push trigger: right
+# after a merge the track skill hasn't applied the Tracking block yet, so a run on main always
+# reports it. The session-start hook shows live drift.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  plan-index:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Plan index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/check-plan-index.sh

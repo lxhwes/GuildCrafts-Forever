@@ -74,11 +74,31 @@ Versions:
 ## Git Workflow
 
 - Branches: `feature/<description>`, `fix/<description>`, `docs/<description>`
-- PRs are squash-merged into `main`, branch deleted after merge
+- PRs are squash-merged into `main`, branch deleted after merge. The squash message is the PR
+  title and body; merge commits are off
 - Force-push to feature branches is fine (they're never shared before PR)
 - After a rebase, use `git push --force-with-lease`
-- New plan item: open an issue titled `<ID>: <title>` with the plan-link header, a Findings
-  and a Done-when checklist, the label and phase milestone; then add its row and `[#N]` link to the plan
+
+### Tracking
+
+Status lives only in the issues; `spec/forever-plan.md` keeps phases, gates, the ID index and
+decisions. The `track` skill (`.claude/skills/track/`) keeps them in step. Use it without
+being asked: at session start when the `Tracking:` line shows drift, after a PR merges, when
+Alex pastes in-game results, and when a new finding comes up.
+
+- New plan item or sub-issue: use `.github/ISSUE_TEMPLATE/plan-item.yml`, titled `<ID>: <title>`,
+  with the plan-link header, Why, Findings and Done when, the labels, the phase milestone and a
+  `wave-N` label in Phase 3. A sub-issue takes its finding ID, or its parent's ID plus a number
+  (`H12.1`), and is linked to the parent. Then add its row and `[#N]` link to the plan
+- Every PR fills in the template's `### Tracking` block (`Finishes:`, `Progress:`,
+  `Evidence-only:`) from what the diff does. `Finishes` only when the PR completes the item
+- Never write a closing keyword (close, fix, resolve and their forms) next to an issue number in a
+  PR title, body or commit message. CI rejects it; issues close through the Tracking block
+- A ticked box, a met gate and a completed close each cite evidence on the same line: a merged
+  PR `(#95)`, a backticked commit on `main`, `migration-forever.md YYYY-MM-DD`,
+  `decisions log YYYY-MM-DD`, a workflow run ID, or a comment link. A `not_planned` close
+  carries a one-line reason
+- `bash tools/check-plan-index.sh` lists drift; `--summary` is the session-start line
 
 ### Important
 Never commit, push, create a PR, merge, tag, or publish without explicit instruction from the
@@ -164,6 +184,8 @@ lua5.1 tools/test-favorites.lua         # favorites stored as 1, not booleans
 lua5.1 tools/test-tooltip-index.lua     # tooltip index rebuild debounce (F9)
 bash tools/test-release-preflight.sh     # release.yml publish refusals (H18), release notes (H20)
 lua5.1 tools/test-chat-links.lua        # chat links, [W] two-word whisper target (F25, F20)
+bash tools/test-closing-keywords.sh      # CI's closing-keyword guard (#15)
+bash tools/test-check-plan-index.sh     # plan/issue drift check, on fixtures
 ```
 
 Each exits non-zero on a failure. They stub WoW APIs and don't exercise the game client or
