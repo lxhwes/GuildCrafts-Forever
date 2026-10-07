@@ -7,6 +7,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # edited: a closing keyword added to the title or body after the last push still fails.
+    types: [opened, synchronize, reopened, edited]
   # release.yml runs this before packaging, so a tag passes the same gate as a PR.
   workflow_call:
     inputs:
@@ -36,6 +38,18 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
+
+      - name: No closing keywords
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --quiet $([ -f .git/shallow ] && echo --unshallow) origin "$BASE_SHA" "$HEAD_SHA"
+          { printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY"; git log --format=%B "$BASE_SHA..$HEAD_SHA"; } |
+            bash .github/scripts/closing-keywords.sh
 
       - name: Install Lua 5.1 and luacheck
         run: |
@@ -72,3 +86,27 @@ jobs:
 
       - name: Chat links and whisper
         run: lua5.1 tools/test-chat-links.lua
+
+      - name: Closing keywords
+        run: bash tools/test-closing-keywords.sh
+
+  # Reports drift between spec/forever-plan.md and the issues. Not required, and it never
+  # fails the run: issue state changes outside PRs, so drift isn't this PR's fault.
+  plan-index:
+    if: github.workflow == 'CI'
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Plan index
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/check-plan-index.sh
+
+      - name: Plan index regressions
+        run: bash tools/test-check-plan-index.sh

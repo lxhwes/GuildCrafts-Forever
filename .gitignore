@@ -19,6 +19,7 @@ SavedVariables/
 tools/*
 !tools/test-*.lua
 !tools/test-*.sh
+!tools/check-plan-index.sh
 
 # Release notes written by .github/scripts/release-notes.sh
 .release-notes.md
