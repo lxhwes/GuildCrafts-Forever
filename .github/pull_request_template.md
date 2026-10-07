@@ -8,7 +8,7 @@
 
 ### Codex review
 
-<!-- review / adversarial-review: ran or skipped (doc-only). One line per rebutted finding, with evidence. -->
+<!-- tools/codex-review.sh: run 1 and run 2 exit codes, or skipped (doc-only). One line per rebutted or deferred finding, with evidence. -->
 
 ### Tracking
 
