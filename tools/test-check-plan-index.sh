@@ -125,6 +125,12 @@ expect 1 "PR #10: Tracking block not applied" "a merged Tracking block not appli
 clean; edit_prs '(.[0].body) = "### Tracking\nFinishes: #3" | (.[0].comments.nodes) = [{body: "Tracking applied: #3 closed"}]'
 expect 0 "0 drift" "an applied Tracking block"
 
+clean; edit_prs '(.[0].body) = "### Tracking\nFinishes: #3, #2 F9" | (.[0].comments.nodes) = [{body: "Tracking applied: 1 closed. Unmatched: #2 F9"}]'
+expect 1 "the last marker lists Unmatched items" "a marker with unmatched items still reports the PR"
+
+clean; edit_prs '(.[0].body) = "### Tracking\nFinishes: #3, #2 F9" | (.[0].comments.nodes) = [{body: "Tracking applied: 1 closed. Unmatched: #2 F9"}, {body: "Tracking applied: 1 closed, 1 ticked."}]'
+expect 0 "0 drift" "a later complete marker clears it"
+
 clean; edit_prs '(.[0].body) = "### Tracking\nFinishes:\nProgress:"'
 expect 0 "0 drift" "an empty Tracking block needs nothing"
 

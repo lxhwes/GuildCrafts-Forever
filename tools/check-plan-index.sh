@@ -9,7 +9,8 @@
 # - every closed issue was closed by a PR or commit, or carries an evidence comment; a
 #   not-planned close carries a reason comment written at the close; a close by a PR (or its commit) whose Tracking block
 #   doesn't list the issue under Finishes is flagged (#15)
-# - merged PRs whose Tracking block hasn't been applied (no "Tracking applied" comment)
+# - merged PRs whose Tracking block hasn't been applied: no "Tracking applied" comment, or the
+#   latest one lists Unmatched items
 # - open umbrellas whose sub-issues are all closed
 #
 # Usage: bash tools/check-plan-index.sh [--summary] [--data DIR] [--plan FILE]
@@ -160,8 +161,10 @@ drift=$(jq -r -n --arg rows "$rows" --arg repo "$repo" \
         end ),
     # merged PRs whose Tracking block is not applied yet
     ( $prs[0][] | select(has_tracking(.)) | select((.body | test("(?im)^(Finishes|Progress|Evidence-only):[ \\t]*[^ \\t\\n]")))
-      | select([.comments.nodes[].body | select(test("Tracking applied"))] | length == 0)
-      | "PR #\(.number): Tracking block not applied" ),
+      | ([.comments.nodes[].body | select(test("^Tracking applied"))] | last) as $marker
+      | if $marker == null then "PR #\(.number): Tracking block not applied"
+        elif ($marker | test("Unmatched:")) then "PR #\(.number): Tracking block not applied: the last marker lists Unmatched items"
+        else empty end ),
     # umbrellas ready to close
     ( $issues[0][] | select(.state == "OPEN" and (.subIssuesSummary.total // 0) > 0
         and .subIssuesSummary.completed == .subIssuesSummary.total)

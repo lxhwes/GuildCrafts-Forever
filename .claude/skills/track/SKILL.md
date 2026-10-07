@@ -28,7 +28,8 @@ For each PR the check lists as "Tracking block not applied":
    `Evidence-only:`. An item is `#N` (whole issue), `#N F30` (the checklist line holding that
    finding ID), or `#N "text"` (the line containing that text).
 2. For each item, check whether a retry already applied it. Skip it only if the target issue has
-   a comment exactly `Tracking: PR #<P> <action> <item>.` for this action and item, and the
+   a comment starting `Tracking: PR #<P> <action> <item>.` (a merge sha may follow) for this
+   action and item, and the
    change it records is visible: the box is ticked, the issue is closed, or the line cites #P.
    Another item from the same PR on the same issue doesn't count.
 3. Resolve the item to exactly one line, or to the whole issue. If zero or several lines match,
@@ -49,6 +50,8 @@ For each PR the check lists as "Tracking block not applied":
    their PRs. Otherwise leave it open and say what's left.
 6. Last, comment on the PR: `Tracking applied: <n> closed, <n> ticked, <n> linked.` Add
    `Unmatched: …` if anything was skipped. Write this marker only after every item is done.
+   The check reads only the latest `Tracking applied:` comment and keeps reporting the PR while
+   it lists `Unmatched:`. Once Alex settles those items, post a new marker without it.
 7. Update the plan only for structure, never for status. Add a new row or link for a new
    issue, move a closed item onto its phase's `Done:` line, and add a decisions-log row for any
    decision the PR made. Those edits go on a branch like any other change.
