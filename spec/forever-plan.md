@@ -28,7 +28,8 @@ guild. Nothing goes to guildmates until Phase 2's exit gate passes.
 
 - Issues [#4]–[#39] created from this plan, titled with their plan IDs. [#44] (H19) and [#45]
   (Q8) added from the CurseForge audit. [#51]–[#66] (N1–N9, G1–G7) added from the Later
-  backlog. [#80] (H20) added 2026-10-04 from the open item in `docs/releasing.md`.
+  backlog. [#80] (H20) added 2026-10-04 from the open item in `docs/releasing.md`. [#104]–[#106]
+  (H22–H24) added 2026-10-06 from a read of the sync code at `538491c`.
 - Labels: `blocker`, `hardening`, `testing`, `needs-ingame`, `post-launch`, and the existing
   `documentation`. The Later backlog added `feature`, `external`, `security` and `research`.
 - One milestone per phase, plus Post-launch and Later.
@@ -120,11 +121,25 @@ DR/BDR election behaviour at 20+ online is the part nobody has exercised.
 
 Each wave runs ~3 days. Move on only when the previous wave has no open `blocker`.
 
+Found on 2026-10-05 by reading the sync code at `538491c`. Not reproduced in game yet.
+
+| ID | Issue | Item | Tags |
+|---|---|---|---|
+| H22 | [#104] | Deltas can leave permanent gaps in a member's recipes | `bug`, `hardening`, `needs-ingame`. Code merged in PR #108: optional `base` (the owner's last recipe revision) on add, touch and remove. Two-client check M in `docs/testing.md` pending |
+| H23 | [#105] | ~~`DELTA_UPDATE` isn't bound to its sender~~ | Done: PR #107, issue closed 2026-10-06. `DELTA_UPDATE` joins `SELF_KEY_FIELD`, refusals counted on their own `/gc report` line |
+
+H24 ([#106], resends that never settle) is bandwidth, not correctness, so it's in Post-launch.
+
 Deferred from Phase 1 on 2026-10-04, by the wave that needs them:
 - Wave 1: H8 and Q2; H12's F7, F27, F36, BDR eviction, paused deltas and returning DR; H14's
-  F22 and F23.
+  F22 and F23. The returning DR is fixed together with H19's DR-elect pull (decided
+  2026-10-06). A DR that misses a delta keeps its old revision and can't pull (H22), so it
+  stays behind until a client ahead of it syncs. The joint fix covers that too: the DR whispers
+  `SYNC_PULL` for that member, which needs no wire change.
 - Wave 2: H17's C1–C3.
-- Wave 3: H19's F30, F31, F33 and M1–M4; H15's F11 event rework and F32.
+- Wave 3: H19's F30, F31, F33 and M1–M4; H15's F11 event rework and F32. F30's herd fix waits
+  for the DR-elect pull and H22, because today the herd is how a new DR catches up and the only
+  repair for delta gaps.
 
 **Feedback channel:** one guild Discord thread, pinned instructions: install, open each
 profession window once, `/gc report` and paste it when anything looks wrong. Every report
@@ -180,11 +195,12 @@ Decided on 2026-10-02 from the legacynext reuse review. Not tracked as issues:
 
 | ID | Issue | Item |
 |---|---|---|
+| H24 | [#106] | Sync resends entries that never settle. Needs M2 numbers from H19 [#44] |
 | C4 | [#30] | Cooldowns from the modern scan |
 | C5 | [#31] | Forever recipe data from DB2s |
 | C6 | [#32] | Recipe sources ("known by" moved to G1 [#60]) |
 | F15 | [#33] | Fuzzy search keeps `y` |
-| — | [#34] | Compact sync encoding (protocol v5) |
+| — | [#34] | Compact sync encoding (protocol v5). H22 [#104] takes the delta base version early; H24 [#106] may fold in its drop digest |
 | — | [#35] | Decide on Blizzard's guild recipe API |
 | — | [#36] | UI/UX (fork review §3) |
 | — | [#37] | Code hygiene |
@@ -270,6 +286,9 @@ Q3 (solo checklist) closed on 2026-10-03: items 3–9 all passed. Q1 ([#24], cli
 | 2026-10-04 | H3 ([#6]) closed as rejected: GRO showed the roster lists offline members with GUIDs |
 | 2026-10-04 | H10 ([#13]) isn't a blocker: 70205 offers no guild view. The scan guard still lands as insurance |
 | 2026-10-04 | Phase 1 close-out: Phase 1 takes H2, H4's F26 fallback, H7, H12's F8/F13/F28, H14's send API, F4 and F24, H15's F12/F16/F21, H17's search copy, H19's F29 and H20. The rest is deferred to the wave that needs it (Phase 3) |
+| 2026-10-06 | H12's returning DR ([#15]) and H19's DR-elect pull ([#44], F30) share a root cause, so they're fixed together in wave 1: a newly elected or returning DR pulls from the BDR or the previous DR before it answers requests. F30's herd fix lands after it and after H22 ([#104]) |
+| 2026-10-06 | H22 ([#104]) and H23 ([#105]) go in Phase 3; H24 ([#106]) is post-launch unless M2 shows it's large |
+| 2026-10-06 | H22's `base` is the owner's last recipe revision, kept locally as `recipeRev`, not `lastUpdate` before the scan. No-change scans bump `lastUpdate` without a delta (`Data.lua:1888` at `538491c`), so that version would mismatch on nearly every delta and trigger a guild-wide pull. Removals follow the same rule, because `MergeProfessionRemoval` raised the revision too. Skill-ups don't move `base`; deltas never carry skill levels |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 
 ---
@@ -399,3 +418,6 @@ Evidence and line numbers (at `60c6b32`) are in
 [#66]: https://github.com/lxhwes/GuildCrafts-Forever/issues/66
 [#80]: https://github.com/lxhwes/GuildCrafts-Forever/issues/80
 [#98]: https://github.com/lxhwes/GuildCrafts-Forever/issues/98
+[#104]: https://github.com/lxhwes/GuildCrafts-Forever/issues/104
+[#105]: https://github.com/lxhwes/GuildCrafts-Forever/issues/105
+[#106]: https://github.com/lxhwes/GuildCrafts-Forever/issues/106
