@@ -143,7 +143,7 @@ still listed on the project's Files tab, but clients set to Release or Beta don'
 ## Before the first release
 
 1. Confirm the upstream author has added your CurseForge account to project 1469206 with
-   upload rights. This isn't in place yet.
+   upload rights. In place: confirmed 2026-10-07 in #23.
 2. Create a CurseForge API token on your CurseForge account.
 3. Store it as a repository secret from your own terminal. Never paste the token into chat,
    a file or a commit.
