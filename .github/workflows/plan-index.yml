@@ -5,10 +5,14 @@ name: Plan index
 # required check. Kept out of ci.yml because release.yml calls ci.yml with contents: write
 # only, and a called job can't ask for more than its caller grants. No push trigger: right
 # after a merge the track skill hasn't applied the Tracking block yet, so a run on main always
-# reports it. The session-start hook shows live drift.
+# reports it. The session-start hook shows live drift. The nightly run catches drift that
+# builds up outside PRs; it fails on drift, so GitHub emails the failure.
 
 on:
   pull_request:
+  schedule:
+    - cron: "0 10 * * *"   # 06:00 America/New_York (EDT), 05:00 in winter
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,7 +22,8 @@ permissions:
 jobs:
   plan-index:
     runs-on: ubuntu-24.04
-    continue-on-error: true
+    # Advisory on PRs only; the nightly run should fail visibly on drift.
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,4 +34,9 @@ jobs:
       - name: Plan index
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash tools/check-plan-index.sh
+        run: |
+          rc=0
+          bash tools/check-plan-index.sh >plan-index.txt 2>&1 || rc=$?
+          cat plan-index.txt
+          { echo '### Plan index'; echo '```'; cat plan-index.txt; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+          exit $rc

@@ -172,7 +172,7 @@ Copy the stubbing pattern from `tools/test-report.lua`. Cases:
 9. `|` in a recipe name becomes `\u007c` in JSON and `/` in CSV.
 10. Profession filter: `csv alchemy` returns only Alchemy rows.
 
-Add the suite to `.github/workflows/ci.yml` and to the list in `CLAUDE.md` "Verification" and
+Add the suite to `.github/workflows/ci.yml` and to the list in
 `docs/testing.md`.
 
 ## In-game checks

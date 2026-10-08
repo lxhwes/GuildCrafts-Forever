@@ -169,7 +169,7 @@ Add `tools/test-optout.lua` (harness from `tools/test-profession-sync.lua`):
 11. `_hiddenMembers` survives `MigrateToGuildPartition` and `MigrateToRecipeDB`.
 12. Stored values are 1, never booleans.
 
-Add the suite to CI, `CLAUDE.md` "Verification" and `docs/testing.md`.
+Add the suite to CI and `docs/testing.md`.
 
 ## Two-client check (`docs/testing.md`)
 

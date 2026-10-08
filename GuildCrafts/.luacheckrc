@@ -5,6 +5,8 @@ max_line_length = false
 -- Exclude vendored libraries
 exclude_files = {
     "Libs/**",
+    -- Claude Code worktrees, should one ever sit under the addon folder
+    ".claude/**",
 }
 
 -- Suppress WoW-convention noise:
