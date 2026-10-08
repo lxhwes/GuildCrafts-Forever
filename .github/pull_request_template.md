@@ -4,7 +4,7 @@
 
 ### Tests
 
-<!-- The commands from CLAUDE.md "Verification" that ran, and their result. -->
+<!-- `bash tools/run-tests.sh` (AGENTS.md "Testing") and anything else that ran, with the result. -->
 
 ### Codex review
 

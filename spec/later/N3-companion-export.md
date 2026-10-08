@@ -87,7 +87,7 @@ in `GuildCraftsDB`. Measure it for real in the test with a writer that formats l
    the value is secret.
 8. Size print for the 100-member fixture (informational, not asserted).
 
-Add to CI, `CLAUDE.md` "Verification" and `docs/testing.md`.
+Add to CI and `docs/testing.md`.
 
 ## In-game
 
