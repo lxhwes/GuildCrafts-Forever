@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails when text on stdin holds a GitHub closing keyword next to an issue reference
 # ("fix #15", "Closes: owner/repo#3", "resolved https://github.com/o/r/issues/4").
-# Issues close only through a PR's Tracking block (CLAUDE.md, Git Workflow). #15 closed by
+# Issues close only through a PR's Tracking block (AGENTS.md, Git workflow). #15 closed by
 # accident from a squash commit body that said "fix #15's".
 # Usage: printf '%s\n' "$TITLE" "$BODY" | bash .github/scripts/closing-keywords.sh
 set -u

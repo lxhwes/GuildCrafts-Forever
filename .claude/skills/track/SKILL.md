@@ -58,7 +58,7 @@ For each PR the check lists as "Tracking block not applied":
 
 ## 3. Alex pastes in-game results
 
-1. Record them in `spec/migration-forever.md` under a dated heading (CLAUDE.md, gist workflow).
+1. Record them in `spec/migration-forever.md` under a dated heading (CLAUDE.md, In-game commands).
 2. Tick the matching boxes in the IG tracker (`ingame-session` label) and in each answered
    issue. Append `` `migration-forever.md YYYY-MM-DD` `` to each, and say which output line
    answers it.

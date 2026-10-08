@@ -18,6 +18,8 @@ manual-changelog:
 # release.sh reading their Interface for CurseForge tagging. These entries keep
 # them out of the zip on local runs.
 ignore:
+  # Claude Code config and worktrees. release.sh skips dot-dirs anyway; this says so.
+  - .claude
   - GuildCrafts/GuildCrafts.toc
   - GuildCrafts/GuildCrafts_Vanilla.toc
   - GuildCrafts/GuildCrafts_Wrath.toc

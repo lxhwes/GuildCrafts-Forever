@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Codex review of the current branch: the task, the commits and the diff go in one prompt,
-# and the structured verdict comes back as JSON. CLAUDE.md "Codex review" says when to run it
+# and the structured verdict comes back as JSON. The codex-review skill says when to run it
 # and what to do with the result.
 #
 # Usage: tools/codex-review.sh (--issue N | --task-file FILE | --task TEXT) [--base REF]

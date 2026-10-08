@@ -22,9 +22,13 @@ tools/*
 !tools/check-plan-index.sh
 !tools/codex-review.sh
 !tools/codex-review.schema.json
+!tools/run-tests.sh
 
 # Release notes written by .github/scripts/release-notes.sh
 .release-notes.md
 
 # Codex review runs written by tools/codex-review.sh
 .codex-review/
+
+# Claude Code worktrees (claude -w, agent and workflow isolation)
+**/.claude/worktrees/

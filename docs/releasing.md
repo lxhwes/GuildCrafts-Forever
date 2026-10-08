@@ -183,7 +183,7 @@ packager on its own would skip CurseForge without an error and still create the 
    ```bash
    tools/codex-review.sh --base <base> --task "Release range since <base>: every change merged to main for the next tag. Weigh how the changes interact: sync, election, prune, GUID identity. Review GuildCrafts/ only; ignore Libs/, docs and specs."
    ```
-5. Fix or rebut every finding as `CLAUDE.md` "Codex review findings" says, and record the
+5. Fix or rebut every finding as the `codex-review` skill says, and record the
    outcome in `spec/migration-forever.md`. A fix changes `main`, so start again from step 2.
 6. Remove the review worktree.
    ```bash
