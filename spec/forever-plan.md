@@ -333,6 +333,8 @@ Q3 (solo checklist, no issue) passed on 2026-10-03: items 3–9.
 | 2026-10-07 | H26 ([#139]) is decided before H12.3 ([#117]), the joint returning-DR fix, is designed |
 | 2026-10-07 | F43 (module split) and F46 (comment sweep) go to [#37] post-launch. Any split respects the untouched Classic TOCs, or waits for Q9 ([#140]). Until the sweep, a PR that changes a function rewrites that function's upstream-history comments (`CLAUDE.md` Rules) |
 | 2026-10-07 | F45 is in scope for D1 cut 2 ([#22]) and stays within the 2026-10-03 history-banner decision |
+| 2026-10-08 | Shared agent rules live in `AGENTS.md`, which `CLAUDE.md` imports. Claude-only workflow stays in `CLAUDE.md`; sync and in-game guidance are path-scoped rules in `.claude/rules/` |
+| 2026-10-08 | Nightly plan drift runs as a scheduled `plan-index.yml` job, not a `/schedule` routine: cloud sessions block GitHub GraphQL, which `tools/check-plan-index.sh` uses |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
 | Open | Q9: keep the five Classic TOCs and `Data/` ([#140]) |
 
