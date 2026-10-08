@@ -8,7 +8,9 @@ Written 2026-10-03 against `main` at `8f0dc69`. It merges Alex's beta plan with:
 - the open items from the 2026-10-02/03 sessions;
 - Alex's documentation review (`spec/documentation-refresh-plan.md`, kept local), as D1;
 - the CurseForge comment audit ([`spec/curseforge-audit.md`](curseforge-audit.md), 2026-10-03,
-  finding IDs F22–F40, indexed at the end).
+  finding IDs F22–F40, indexed at the end);
+- the code review ([`spec/code-review-2026-10-07.md`](code-review-2026-10-07.md), 2026-10-07,
+  finding IDs F41–F46, indexed at the end).
 
 Work items live in [GitHub Issues](https://github.com/lxhwes/GuildCrafts-Forever/issues), one per
 plan ID, each with its why, findings and done-when. Status lives only there. This file keeps the
@@ -34,7 +36,8 @@ guild. Nothing goes to guildmates until Phase 2's exit gate passes.
   (Q8) added from the CurseForge audit. [#51]–[#66] (N1–N9, G1–G7) added from the Later
   backlog. [#80] (H20) added 2026-10-04 from the open item in `docs/releasing.md`. [#104]–[#106]
   (H22–H24) added 2026-10-06 from a read of the sync code at `538491c`. Sub-issues [#112]–[#130]
-  and in-game trackers [#131]–[#135] added 2026-10-07.
+  and in-game trackers [#131]–[#135] added 2026-10-07. [#138]–[#140] (H25, H26, Q9) added
+  2026-10-07 from the code review.
 - Labels: `blocker`, `hardening`, `testing`, `needs-ingame`, `post-launch`, and the existing
   `documentation`. The Later backlog added `feature`, `external`, `security` and `research`.
   `wave-1`–`wave-3` and `ingame-session` added 2026-10-07.
@@ -123,6 +126,8 @@ Umbrella issues stay open until their last sub-issue closes.
 | H12.2 | [#116] | Paused deltas are dropped, not queued |
 | H12.3 | [#117] | A newly elected or returning DR pulls before it answers (joint with H19's DR-elect pull) |
 | H12.4 | [#118] | The merge-side partial-scan guard uses raw counts |
+| H25 | [#138] | Simulator in its own module; election and delta suites; wave-1 known-gap scenarios (F41). Tools only; lands before H12.3 |
+| H26 | [#139] | Do DR terms earn their keep? Investigate with the H25 simulator, then remove or document (F42). Decided before H12.3 is designed |
 | H14 | [#17] | Chat and whisper on Forever (umbrella) |
 | F22 | [#119] | `!gc` fallback delays collide |
 | F23 | [#120] | `!gc` cooldown is stamped only on the client that posted |
@@ -183,7 +188,7 @@ behaviour, not data. Don't build anything that migrates beta data.
 | D1 cut 2 | [#22] | Documentation refresh, cut 2 |
 
 1. Fix whatever waves 2–3 surfaced. Freeze features on **Oct 28**.
-2. After the freeze, do D1 cut 2 ([#22]).
+2. After the freeze, do D1 cut 2 ([#22]). Its scope includes F45.
 3. When the launch build appears on the `forever` branch, re-run the solo checklist
    (`docs/testing.md`) on it and bump the pin in the docs.
 4. Tag `v2.1.0-forever`, publish as **release** on the launch date (target Nov 4), following
@@ -230,7 +235,7 @@ Decided on 2026-10-02 from the legacynext reuse review. Not tracked as issues:
 | — | [#34] | Compact sync encoding (protocol v5). H22 [#104] takes the delta base version early; H24 [#106] may fold in its drop digest |
 | — | [#35] | Decide on Blizzard's guild recipe API |
 | — | [#36] | UI/UX (fork review §3) |
-| — | [#37] | Code hygiene |
+| — | [#37] | Code hygiene (F43, F46) |
 | — | [#38] | Ace3 fixes newer than r1403 |
 | — | [#39] | 99-fallback expansion pruning |
 
@@ -288,6 +293,7 @@ Each question's issue holds its status; the last column names the session that a
 | Q6 | Does ChatThrottleLib v32 clear the chat taint in game? | [#28] | IG3 [#133] |
 | Q7 | Date and channel of [@dkruenbo](https://github.com/dkruenbo)'s two messages, for `docs/ORIGIN.md` | [#29] | Alex |
 | Q8 | Do GUILD addon messages reach a client inside an instance? `Comms.lua` assumes not; three upstream reports suggest they do | [#45] | IG1 [#131], the R4 probe in `spec/curseforge-audit.md` |
+| Q9 | Keep the five Classic TOCs and `Data/` in the fork? (F44) | [#140] | Alex, when [#37] starts |
 
 Q3 (solo checklist, no issue) passed on 2026-10-03: items 3–9.
 
@@ -323,7 +329,12 @@ Q3 (solo checklist, no issue) passed on 2026-10-03: items 3–9.
 | 2026-10-07 | Status lives only in the issues. This file keeps phases, gates, the ID index and decisions; `tools/check-plan-index.sh` checks the two agree and prints the summary at session start |
 | 2026-10-07 | Issues close only through a merged PR's Tracking block (applied by the `track` skill) or by hand with an evidence comment. CI rejects closing keywords; squash merges take the PR body, and merge commits are off. #15 had closed from a squash commit body |
 | 2026-10-07 | Findings that land in different phases are sub-issues of their umbrella. A sub-issue with no finding ID takes its parent's ID plus a number (H12.1). The joint DR fix is H12.3 ([#117]) under #15; F30 ([#125]) is blocked by it and by H22 |
+| 2026-10-07 | The multi-client `Sim` moves out of `test-forever-identity.lua` into `tools/lib/sim.lua`, with election and delta suites of their own (H25, [#138]). Wave-1 sync fixes start as known-gap scenarios there |
+| 2026-10-07 | H26 ([#139]) is decided before H12.3 ([#117]), the joint returning-DR fix, is designed |
+| 2026-10-07 | F43 (module split) and F46 (comment sweep) go to [#37] post-launch. Any split respects the untouched Classic TOCs, or waits for Q9 ([#140]). Until the sweep, a PR that changes a function rewrites that function's upstream-history comments (`CLAUDE.md` Rules) |
+| 2026-10-07 | F45 is in scope for D1 cut 2 ([#22]) and stays within the 2026-10-03 history-banner decision |
 | Open | Build on Blizzard's guild recipe API (post-launch, [#35]) |
+| Open | Q9: keep the five Classic TOCs and `Data/` ([#140]) |
 
 ---
 
@@ -387,6 +398,20 @@ Evidence and line numbers (at `60c6b32`) are in
 | F38 | Login reminder repeats every login [L5] | [#36] |
 | F39 | Row click expands reagents only on the +/- glyph [U3] | [#36] |
 | F40 | The newer-version warning prints a raw GUID [D3] | [#37] |
+
+## Finding index (code review, 2026-10-07)
+
+Evidence and line numbers (at `ab56976`) are in
+[`spec/code-review-2026-10-07.md`](code-review-2026-10-07.md).
+
+| ID | Finding | Issue |
+|---|---|---|
+| F41 | The multi-client simulator lives in `test-forever-identity.lua`, where wave-1 work won't find it | [#138] |
+| F42 | `currentTerm` is a per-node counter nodes never vote on; caused F8 | [#139] |
+| F43 | `Data.lua`/`Comms.lua` grew about 25% over upstream; election, merge and scan are mixed | [#37] |
+| F44 | Five unpublished flavors kept in the repo | Question Q9 [#140]; the status quo stands (decisions log 2026-10-02) |
+| F45 | Docs need upkeep out of proportion to the addon; some are already historical | [#22] |
+| F46 | Inherited comments narrate upstream patch history | [#37]; rule for touched functions in `CLAUDE.md` |
 
 ## What this plan deliberately doesn't do
 
@@ -479,3 +504,6 @@ Evidence and line numbers (at `60c6b32`) are in
 [#133]: https://github.com/lxhwes/GuildCrafts-Forever/issues/133
 [#134]: https://github.com/lxhwes/GuildCrafts-Forever/issues/134
 [#135]: https://github.com/lxhwes/GuildCrafts-Forever/issues/135
+[#138]: https://github.com/lxhwes/GuildCrafts-Forever/issues/138
+[#139]: https://github.com/lxhwes/GuildCrafts-Forever/issues/139
+[#140]: https://github.com/lxhwes/GuildCrafts-Forever/issues/140

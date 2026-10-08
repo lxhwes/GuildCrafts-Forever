@@ -32,6 +32,9 @@ author's permission (`docs/ORIGIN.md`).
   Names are "First Surname" with no realm.
 - Read the relevant upstream RFC in `RFC/` before changing sync or election code. They are
   historical, so check them against source and `spec/migration-forever.md`.
+- When a PR changes a function, rewrite that function's upstream-history comments ("Patch 3",
+  "1.1.7+") to say what the code does. Fork plan IDs (H22, F8) are fine. No comment-only PRs
+  during the beta (F46, [#37](https://github.com/lxhwes/GuildCrafts-Forever/issues/37)).
 
 ---
 
