@@ -95,3 +95,6 @@ jobs:
 
       - name: Codex review script
         run: bash tools/test-codex-review.sh
+
+      - name: Test runner
+        run: bash tools/test-run-tests.sh
