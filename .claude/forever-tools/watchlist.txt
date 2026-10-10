@@ -67,6 +67,7 @@ UIPanelScrollFrameTemplate
 UIPanelCloseButton
 UISpecialFrames
 SetResizeBounds
+SetFrameStrata
 TooltipDataProcessor
 TooltipDataType
 IsShiftKeyDown
